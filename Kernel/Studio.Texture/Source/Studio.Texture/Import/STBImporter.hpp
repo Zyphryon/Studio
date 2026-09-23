@@ -20,16 +20,12 @@
 
 namespace Studio::Texture
 {
-    /// \brief An \ref Importer backed by `stb_image`, covering the common lossy and lossless source families.
+    /// \brief Represents an \ref Importer backed by `stb_image`, for the common image formats art is saved in.
     class STBImporter final : public Importer
     {
     public:
 
         /// \brief The source file extensions this importer accepts.
-        ///
-        /// \note Kept in step with the `STBI_ONLY_` set the build enables, so an accepted extension always has
-        ///       a decoder behind it. Photoshop, GIF and Softimage are not art-pipeline interchange formats,
-        ///       and stb reads sixteen-bit PNM without the byte swap its own specification calls for.
         static constexpr Text kTypes[] =
         {
             "png", "jpg", "jpeg", "tga", "bmp", "hdr"

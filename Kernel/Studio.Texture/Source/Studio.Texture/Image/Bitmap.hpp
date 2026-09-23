@@ -12,7 +12,7 @@
 // [  HEADER  ]
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#include "Zyphryon.Graphic/Types.hpp"
+#include <Zyphryon.Graphic/Types.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -20,12 +20,12 @@
 
 namespace Studio::Texture
 {
-    /// \brief A decoded source bitmap, handed from an importer to the exporter.
+    /// \brief Represents decoded pixels in one texture format, as they travel from an importer to the exporter.
     class Bitmap final
     {
     public:
 
-        /// \brief The engine texture format describing how this bitmap's pixels are laid out.
+        /// \brief The texture format the pixels are stored in.
         using Format = ZyGraphic::TextureFormat;
 
     public:
@@ -39,13 +39,13 @@ namespace Studio::Texture
         {
         }
 
-        /// \brief Constructs an Bitmap from decoded pixel data.
+        /// \brief Constructs a bitmap from decoded pixels.
         ///
-        /// \param Format The format of the data.
+        /// \param Format The format the pixels are stored in.
         /// \param Width  The width of the base level, in pixels.
         /// \param Height The height of the base level, in pixels.
         /// \param Levels The number of mip levels \p Data holds, including the base level.
-        /// \param Data   The tightly-packed pixels, with each level following the one above it.
+        /// \param Data   The tightly packed pixels, each level following the one above it.
         ZY_INLINE Bitmap(Format Format, UInt16 Width, UInt16 Height, UInt8 Levels, AnyRef<Blob> Data)
             : mFormat { Format },
               mWidth  { Width },
@@ -57,7 +57,7 @@ namespace Studio::Texture
 
         /// \brief Gets the format the pixels are stored in.
         ///
-        /// \return The texture format describing the bitmap's layout.
+        /// \return The texture format of the pixels.
         ZY_INLINE Format GetFormat() const
         {
             return mFormat;
@@ -81,18 +81,18 @@ namespace Studio::Texture
 
         /// \brief Gets the number of mip levels the pixels hold, including the base level.
         ///
-        /// \return The level count, or zero when the bitmap carries no pixels.
+        /// \return The level count, or zero if the bitmap holds no pixels.
         ZY_INLINE UInt8 GetLevels() const
         {
             return mLevels;
         }
 
-        /// \brief Gets the pixels as a read-only byte span.
+        /// \brief Gets the pixels as read-only bytes.
         ///
-        /// \return A span over every level of the bitmap.
+        /// \return The bytes of every level, empty if the bitmap holds none.
         ZY_INLINE ConstSpan<Byte> GetPixels() const
         {
-            return ConstSpan(mData.GetData(), mData.GetSize());
+            return mData;
         }
 
     private:

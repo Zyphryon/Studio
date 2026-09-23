@@ -22,7 +22,6 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    // Every cut addresses whole texels of one level, whichever shape it takes, so both share this gate.
     static Bool Accepts(ConstRef<Bitmap> Source)
     {
         const ZyGraphic::TextureFormat   Format   = Source.GetFormat();
@@ -48,7 +47,8 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Bitmap Process(ConstRef<Bitmap> Source, ConstRef<Slicer::Layout::Cell> Cell, UInt32 Width, UInt32 Height, UInt32 Stride)
+    static Bitmap Process(
+        ConstRef<Bitmap> Source, ConstRef<Slicer::Layout::Cell> Cell, UInt32 Width, UInt32 Height, UInt32 Stride)
     {
         const UInt32 Sweep = Source.GetWidth() * Stride;   // One row of the atlas.
         const UInt32 Line  = Width * Stride;               // One row of the cell.
@@ -155,7 +155,7 @@ namespace Studio::Texture
             return Sequence<Bitmap>();
         }
 
-        // A layout may be built by hand, so the grid is checked here rather than trusted from its maker.
+        // A layout may be built by hand, so the grid is checked here instead of trusted.
         if (Source.GetWidth() % Layout.Columns != 0 || Source.GetHeight() % Layout.Rows != 0)
         {
             LOG_E("Texture: a {0}x{1} grid does not divide a {2}x{3} atlas exactly",

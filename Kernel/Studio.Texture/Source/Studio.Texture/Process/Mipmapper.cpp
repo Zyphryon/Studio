@@ -107,7 +107,7 @@ namespace Studio::Texture
         ZY_ASSERT(Source.GetLevels() == 1, "A chain can only be built from a single level");
         ZY_ASSERT(Levels <= ZyGraphic::GetLevelCount(Width, Height), "More levels than the extent can halve into");
 
-        // Nothing to filter, so the surface passes straight through rather than being copied.
+        // With nothing to filter, the bitmap is handed back as it is rather than copied.
         if (Levels <= 1)
         {
             return Move(Source);
@@ -117,7 +117,7 @@ namespace Studio::Texture
 
         const Ptr<Byte> Target = Output.GetData<Byte>();
 
-        // The base level carries over untouched; each later level is filtered from the one immediately above.
+        // The base level is copied as it is, and each later level is averaged down from the one above it.
         Copy(Target, ZyGraphic::GetLevelSize(Format, Width, Height, 0), Source.GetPixels().GetData());
 
         const auto Process = Pick(Metadata);

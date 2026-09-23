@@ -20,19 +20,19 @@
 
 namespace Studio::Texture
 {
-    /// \brief Filters a bitmap into an extent other than the one it was authored at.
+    /// \brief Resizes a bitmap, averaging the source texels each target texel covers.
     class Resampler final
     {
     public:
 
         /// \brief Filters the base level of a bitmap into a new extent.
         ///
-        /// \note Only the base level is read, so the result carries a single level and is re-filtered afterwards.
+        /// \note Only the base level is read, so the result holds a single level; mips are built afterwards.
         ///
         /// \param Source The bitmap to filter.
         /// \param Width  The width to filter into, in pixels.
         /// \param Height The height to filter into, in pixels.
-        /// \return A bitmap at the requested extent, or an invalid bitmap when the source cannot be filtered.
+        /// \return A bitmap at the requested extent, or an invalid bitmap if the source cannot be filtered.
         static Bitmap Resize(ConstRef<Bitmap> Source, UInt16 Width, UInt16 Height);
     };
 }

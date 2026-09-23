@@ -28,19 +28,19 @@ namespace Studio::Texture
         /// \brief The number of faces a cube map carries.
         static constexpr UInt32 kFaces = 6;
 
-        /// \brief How an atlas divides into cells, and the order they are cut in.
+        /// \brief Describes how an atlas divides into cells, and the order they are cut in.
         struct Layout final
         {
-            /// \brief Where one cell sits, counted in whole cells from the top-left.
+            /// \brief Describes where one cell sits, counted in whole cells from the top-left.
             struct Cell final
             {
-                /// The cell's column, counted from the left edge.
+                /// The column, counted from the left edge.
                 UInt16 Column = 0;
 
-                /// The cell's row, counted from the top edge.
+                /// The row, counted from the top edge.
                 UInt16 Row    = 0;
 
-                /// Whether the cell is turned half a revolution as it is cut.
+                /// Whether the cell is rotated by 180 degrees as it is cut.
                 Bool   Turned = false;
             };
 
@@ -55,7 +55,7 @@ namespace Studio::Texture
 
             /// \brief Checks whether the layout describes a division at all.
             ///
-            /// \return `true` when the layout divides the atlas, otherwise `false`.
+            /// \return `true` if the layout divides the atlas, otherwise `false`.
             ZY_INLINE Bool IsValid() const
             {
                 return Columns > 0 && Rows > 0;
@@ -89,7 +89,7 @@ namespace Studio::Texture
         ///
         /// \param Columns The number of faces across.
         /// \param Rows    The number of faces down.
-        /// \return The layout, or an invalid layout when the grid holds no known arrangement.
+        /// \return The layout, or an invalid layout if the grid holds no known arrangement.
         static Layout Describe(UInt32 Columns, UInt32 Rows);
 
         /// \brief Builds a layout that walks an atlas row by row in cells of a fixed extent.
@@ -97,14 +97,14 @@ namespace Studio::Texture
         /// \param Source The atlas the cells are measured against.
         /// \param Width  The width of one cell, in texels.
         /// \param Height The height of one cell, in texels.
-        /// \return The layout, or an invalid layout when the cells do not tile the atlas exactly.
+        /// \return The layout, or an invalid layout if the cells do not tile the atlas exactly.
         static Layout Divide(ConstRef<Bitmap> Source, UInt32 Width, UInt32 Height);
 
-        /// \brief Slice an atlas into one bitmap per cell of a layout.
+        /// \brief Slices an atlas into one bitmap per cell of a layout.
         ///
         /// \param Source The single-level atlas to cut.
         /// \param Layout The division to cut it along.
-        /// \return One bitmap per cell, or an empty sequence when the atlas cannot be cut that way.
+        /// \return One bitmap per cell, or an empty sequence if the atlas cannot be cut that way.
         static Sequence<Bitmap> Slice(ConstRef<Bitmap> Source, ConstRef<Layout> Layout);
 
         /// \brief Cuts one bitmap out of a source at an arbitrary texel rectangle.
@@ -114,7 +114,7 @@ namespace Studio::Texture
         /// \param Y      The top edge of the rectangle, in texels.
         /// \param Width  The width of the rectangle, in texels.
         /// \param Height The height of the rectangle, in texels.
-        /// \return The cut bitmap, or an empty bitmap when the rectangle leaves the surface.
+        /// \return The cut bitmap, or an empty bitmap if the rectangle leaves the surface.
         static Bitmap Crop(ConstRef<Bitmap> Source, UInt32 X, UInt32 Y, UInt32 Width, UInt32 Height);
     };
 }

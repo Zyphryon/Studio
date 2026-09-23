@@ -18,13 +18,11 @@
 
 namespace Studio::Texture
 {
-    /// \brief The alpha below which a pixel counts as empty.
-    static constexpr Real32 kOpaque = 0.5f;
-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static void Measure(ConstRef<Field> Height, SInt32 X, SInt32 Y, Normal::Kernel Filter, Bool Wrap, Ref<Real32> DX, Ref<Real32> DY)
+    static void Measure(
+        ConstRef<Field> Height, SInt32 X, SInt32 Y, Normal::Kernel Filter, Bool Wrap, Ref<Real32> DX, Ref<Real32> DY)
     {
         const auto At = [&](SInt32 OffsetX, SInt32 OffsetY)
         {
@@ -100,14 +98,14 @@ namespace Studio::Texture
 
         Field Base = Field::From(Source, Settings.Source, Settings.Invert);
 
-        // Where nothing is drawn is ground, so the art's outline reads as the edge of a raised shape.
+        // Transparent pixels are ground level, so the outline of the art reads as the edge of a raised shape.
         if (Settings.Masked)
         {
             for (UInt32 Y = 0; Y < Height; ++Y)
             {
                 for (UInt32 X = 0; X < Width; ++X)
                 {
-                    if (Source.Get(X, Y).GetAlpha() < kOpaque)
+                    if (Source.Get(X, Y).GetAlpha() < 0.5f)
                     {
                         Base.Set(X, Y, 0.0f);
                     }
@@ -119,8 +117,8 @@ namespace Studio::Texture
 
         Sequence<Real32> SlopeX;
         Sequence<Real32> SlopeY;
-        SlopeX.Resize(static_cast<UInt>(Width) * Height, 0.0f);
-        SlopeY.Resize(static_cast<UInt>(Width) * Height, 0.0f);
+        SlopeX.Fill(0.0f, static_cast<UInt>(Width) * Height);
+        SlopeY.Fill(0.0f, static_cast<UInt>(Width) * Height);
 
         // Each octave measures a copy blurred twice as wide, so broad shapes and fine grain both show.
         Real32 Weight = 1.0f;
@@ -157,8 +155,8 @@ namespace Studio::Texture
             {
                 const Real32 Alpha = Source.Get(X, Y).GetAlpha();
 
-                // A normal faces away from where the height climbs. Rows run down the image while the map's up
-                // runs up the card, so the vertical slope enters with its sign kept.
+                // A normal leans away from rising height, hence the negated X. Image rows run downward while the
+                // map's +Y points up, so the vertical slope keeps its sign.
                 Real32 NX = -SlopeX[Y * Width + X] * Settings.Strength;
                 Real32 NY =  SlopeY[Y * Width + X] * Settings.Strength;
                 Real32 NZ = 1.0f;
@@ -172,7 +170,7 @@ namespace Studio::Texture
                     NY = -NY;
                 }
 
-                if (Settings.Masked && Alpha < kOpaque)
+                if (Settings.Masked && Alpha < 0.5f)
                 {
                     NX = 0.0f;
                     NY = 0.0f;

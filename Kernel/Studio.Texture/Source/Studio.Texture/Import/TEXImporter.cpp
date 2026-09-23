@@ -41,9 +41,7 @@ namespace Studio::Texture
             return Surface();
         }
 
-        const UInt16 Version = Input.Read<UInt16>();
-
-        if (Version != Exporter::kVersion)
+        if (const UInt16 Version = Input.Read<UInt16>(); Version != Exporter::kVersion)
         {
             LOG_E("Texture: ZTEX version {0} is not one this importer reads", Version);
 
@@ -52,12 +50,12 @@ namespace Studio::Texture
 
         const ZyGraphic::TextureLayout Layout  = Input.Read<ZyGraphic::TextureLayout>();
         const ZyGraphic::TextureFormat Format  = Input.Read<ZyGraphic::TextureFormat>();
-        const UInt16                 Width   = Input.Read<UInt16>();
-        const UInt16                 Height  = Input.Read<UInt16>();
-        const UInt16                 Layers  = Input.Read<UInt16>();
-        const UInt8                  Levels  = Input.Read<UInt8>();
-        const UInt32                 Size    = Input.Read<UInt32>();
-        const ConstSpan<Byte>        Payload = Input.ReadBlock<UInt32, Byte>();
+        const UInt16                   Width   = Input.Read<UInt16>();
+        const UInt16                   Height  = Input.Read<UInt16>();
+        const UInt16                   Layers  = Input.Read<UInt16>();
+        const UInt8                    Levels  = Input.Read<UInt8>();
+        const UInt32                   Size    = Input.Read<UInt32>();
+        const ConstSpan<Byte>          Payload = Input.ReadBlock<UInt32, Byte>();
 
         if (Width == 0 || Height == 0 || Layers == 0 || Levels == 0 || Size == 0 || Payload.IsEmpty())
         {
@@ -66,8 +64,8 @@ namespace Studio::Texture
             return Surface();
         }
 
-        // Cropping, filtering and transcoding each address one texel at a time, which a block-compressed or
-        // bit-packed payload would only expose through a decoder this baker does not carry.
+        // Every later stage reads one texel at a time, which a block-compressed or bit-packed payload cannot
+        // offer without a decoder this baker does not have.
         const ZyGraphic::TextureMetadata Description = ZyGraphic::GetTextureMetadata(Format);
 
         if (Description.IsCompressed() || Description.IsPacked || !Description.IsSampler())
@@ -117,7 +115,7 @@ namespace Studio::Texture
 
         for (UInt32 Slice = 0; Slice < Layers; ++Slice)
         {
-            Blob Data = Blob::Copy(ConstSpan<Byte>(Pixels + static_cast<UInt>(Slice) * Stride, Length));
+            Blob Data = Blob::Copy(ConstSpan(Pixels + static_cast<UInt>(Slice) * Stride, Length));
 
             Result.Slices.Append(Bitmap(Format, Width, Height, 1, Move(Data)));
         }

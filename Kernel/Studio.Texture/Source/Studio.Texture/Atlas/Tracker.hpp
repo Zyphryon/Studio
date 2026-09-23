@@ -37,7 +37,7 @@ namespace Studio::Texture
 
         /// \brief Checks whether the rectangle covers anything.
         ///
-        /// \return `true` when both sides are longer than zero, otherwise `false`.
+        /// \return `true` if both sides are longer than zero, otherwise `false`.
         ZY_INLINE Bool IsValid() const
         {
             return Width > 0 && Height > 0;
@@ -59,11 +59,11 @@ namespace Studio::Texture
         /// The slice of the texture the image sits on, which is zero for anything but an array.
         UInt16 Slice = 0;
 
-        /// Where the image sits on its slice.
+        /// The place the image takes on its slice.
         Area   Rect;
     };
 
-    /// \brief Represents an atlas or an array as a list of named regions, the file any tool can read it by.
+    /// \brief Represents an atlas or an array as a list of named regions, saved as the JSON file other tools read.
     struct Tracker final
     {
         /// \brief The revision of the file layout this tracker reads and writes.
@@ -75,7 +75,7 @@ namespace Studio::Texture
         /// The layout the texture is written as: a flat atlas, or an array of pages.
         ZyGraphic::TextureLayout Layout  = ZyGraphic::TextureLayout::Texture2D;
 
-        /// The format the texture is written in, or unspecified to take the first source's.
+        /// The format the texture is written in, or `Unspecified` to take the first source's.
         ZyGraphic::TextureFormat Format  = ZyGraphic::TextureFormat::Unspecified;
 
         /// The width of every slice, in pixels.
@@ -99,14 +99,32 @@ namespace Studio::Texture
         /// \brief Reads a tracker from disk.
         ///
         /// \param Path   The JSON file to read.
-        /// \param Output Receives the tracker, left untouched when the file cannot be read.
-        /// \return `true` when the file was read, otherwise `false`.
+        /// \param Output Receives the tracker, left untouched if the file cannot be read.
+        /// \return `true` if the file was read, otherwise `false`.
         static Bool Read(Text Path, Ref<Tracker> Output);
 
-        /// \brief Writes the tracker to disk, with each region's crop worked out for consumers that sample by it.
+        /// \brief Writes the tracker to disk, adding each region's crop for the consumers that sample by it.
         ///
         /// \param Path The JSON file to write; any folder in it that does not exist yet is created.
-        /// \return `true` when the file was written, otherwise `false`.
+        /// \return `true` if the file was written, otherwise `false`.
         Bool Write(Text Path) const;
+
+        /// \brief Turns a path as a tracker holds it into one the process can open.
+        ///
+        /// \param Folder The folder the tracker sits in.
+        /// \param Path   The path as the tracker holds it.
+        /// \return \p Path itself if it is absolute, otherwise \p Path appended to \p Folder.
+        static Str Resolve(Text Folder, Text Path);
+
+        /// \brief Turns a path the process can open into one relative to the tracker, as the tracker holds it.
+        ///
+        /// \note Paths are compared as text and the working folder is never looked up, so a relative path cannot
+        ///       be related to an absolute folder.
+        ///
+        /// \param Folder The folder the tracker sits in.
+        /// \param Path   The path to relate.
+        /// \param Output Receives the relative path, or \p Path itself if the two lie on different drives.
+        /// \return `true` if the path was related, otherwise `false`.
+        static Bool Relate(Text Folder, Text Path, Ref<Str> Output);
     };
 }

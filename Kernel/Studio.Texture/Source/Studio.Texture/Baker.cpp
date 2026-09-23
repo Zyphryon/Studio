@@ -13,7 +13,6 @@
 #include "Baker.hpp"
 #include "Studio.Texture/Import/STBImporter.hpp"
 #include "Studio.Texture/Import/TEXImporter.hpp"
-#include "Studio.Texture/Process/Resampler.hpp"
 #include "Studio.Texture/Process/Slicer.hpp"
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -97,7 +96,7 @@ namespace Studio::Texture
             return Blob();
         }
 
-        // The two divisions describe different layouts, so an atlas cannot be cut along both at once.
+        // A cube and an array are different layouts, so one source cannot be cut into both.
         if (Profile.Cube.IsValid() && Profile.Slice.IsValid())
         {
             LOG_E("Texture: a source is cut either into cube faces or into array slices, not both");
@@ -112,7 +111,7 @@ namespace Studio::Texture
             return Blob();
         }
 
-        // A source that carries its own slices is already divided, so a grid would name a second, other cut.
+        // A source with several slices (a baked array or cube) is already cut, so it cannot be cut again.
         if (Decoded.Slices.GetSize() > 1)
         {
             if (Profile.Cube.IsValid() || Profile.Slice.IsValid())
@@ -151,13 +150,8 @@ namespace Studio::Texture
             return Exporter::Export(mScheduler, Move(Slices), ZyGraphic::TextureLayout::Texture2DArray, Profile);
         }
 
-        // A lone slice keeps the layout it was decoded as, so a one-layer array does not come back as a plain 2D,
-        // unless the profile asks for every image as an array.
-        const ZyGraphic::TextureLayout Layout = (Profile.Layered && Decoded.Layout == ZyGraphic::TextureLayout::Texture2D)
-            ? ZyGraphic::TextureLayout::Texture2DArray
-            : Decoded.Layout;
-
-        return Exporter::Export(mScheduler, Move(Decoded.Slices), Layout, Profile);
+        // A lone slice keeps the layout it was decoded as, so a one-slice array stays an array.
+        return Exporter::Export(mScheduler, Move(Decoded.Slices), Profile.GetLayout(Decoded.Layout), Profile);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -198,7 +192,7 @@ namespace Studio::Texture
 
     Bool Baker::Bake(Text Source, Text Destination, ConstRef<Profile> Profile) const
     {
-        // A baked texture is a source now, so a bake can be handed the very path it is about to write over.
+        // A baked texture can be a source too, so nothing else stops a bake from writing over its own input.
         if (StrEqualCase(Source, Destination))
         {
             LOG_E("Texture: '{0}' is both the source and the destination", Source);

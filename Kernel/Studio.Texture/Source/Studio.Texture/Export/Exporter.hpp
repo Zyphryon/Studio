@@ -22,7 +22,7 @@
 
 namespace Studio::Texture
 {
-    /// \brief Writes a decoded bitmap out in the engine's native texture format.
+    /// \brief Writes decoded bitmaps in the engine's native texture format.
     class Exporter final
     {
     public:
@@ -52,15 +52,19 @@ namespace Studio::Texture
         /// \param Scheduler The pool the slices are mipped and transcoded on.
         /// \param Slices    The decoded bitmaps to write, one per array slice or cube face.
         /// \param Layout    The layout the slices compose.
-        /// \param Profile   The settings controlling format, mip generation, and compression.
+        /// \param Profile   The settings controlling format, mip generation and compression.
         /// \return A blob holding the texture file bytes, or an empty blob on failure.
-        static Blob Export(Ref<ZyJob::Service> Scheduler, AnyRef<Sequence<Bitmap>> Slices, ZyGraphic::TextureLayout Layout, ConstRef<Profile> Profile);
+        static Blob Export(
+            Ref<ZyJob::Service>      Scheduler,
+            AnyRef<Sequence<Bitmap>> Slices,
+            ZyGraphic::TextureLayout Layout,
+            ConstRef<Profile>        Profile);
 
         /// \brief Serializes a single decoded bitmap into a native texture blob.
         ///
         /// \param Scheduler The pool the mip chain is built on.
         /// \param Source    The decoded bitmap to write.
-        /// \param Profile   The settings controlling format, mip generation, and compression.
+        /// \param Profile   The settings controlling format, mip generation and compression.
         /// \return A blob holding the texture file bytes, or an empty blob on failure.
         static Blob Export(Ref<ZyJob::Service> Scheduler, AnyRef<Bitmap> Source, ConstRef<Profile> Profile);
     };

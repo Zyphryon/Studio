@@ -18,12 +18,6 @@
 
 namespace Studio::Texture
 {
-    /// \brief The alpha below which a pixel counts as empty.
-    static constexpr Real32 kEmpty = 0.5f;
-
-    /// \brief A distance no pixel of a texture can be from another.
-    static constexpr Real32 kFar   = 1.0e9f;
-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -34,12 +28,12 @@ namespace Studio::Texture
 
         Field Result(Source.GetWidth(), Source.GetHeight());
 
-        // Empty pixels sit on the outline's far side, at distance zero; every drawn one starts out of reach.
+        // Empty pixels are the outline, at distance zero; every drawn pixel starts out unreached.
         for (SInt32 Y = 0; Y < Height; ++Y)
         {
             for (SInt32 X = 0; X < Width; ++X)
             {
-                Result.Set(X, Y, Source.Get(X, Y).GetAlpha() < kEmpty ? 0.0f : kFar);
+                Result.Set(X, Y, Source.Get(X, Y).GetAlpha() < 0.5f ? 0.0f : 1.0e9f);
             }
         }
 
@@ -56,7 +50,8 @@ namespace Studio::Texture
         constexpr Real32 kStraight = 1.0f;
         constexpr Real32 kDiagonal = 1.41421356f;
 
-        // Two sweeps, one down and one back up, carry each distance across the neighbours already settled.
+        // A chamfer distance transform: one pass down and one back up, each pixel taking the nearest distance its
+        // already visited neighbours offer.
         for (SInt32 Y = 0; Y < Height; ++Y)
         {
             for (SInt32 X = 0; X < Width; ++X)
@@ -166,7 +161,7 @@ namespace Studio::Texture
                     Value = Shape * (1.0f - Settings.Detail + Settings.Detail * Value);
                 }
 
-                if (Settings.Masked && Alpha < kEmpty)
+                if (Settings.Masked && Alpha < 0.5f)
                 {
                     Value = 0.0f;
                 }

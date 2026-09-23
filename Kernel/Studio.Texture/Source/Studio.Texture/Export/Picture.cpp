@@ -26,14 +26,7 @@ namespace Studio::Texture
 
     static void Collect(Ptr<void> Context, Ptr<void> Data, SInt32 Size)
     {
-        Ref<Sequence<Byte>> Output = * static_cast<Ptr<Sequence<Byte>>>(Context);
-
-        const ConstPtr<Byte> Bytes = static_cast<ConstPtr<Byte>>(Data);
-
-        for (SInt32 Index = 0; Index < Size; ++Index)
-        {
-            Output.Append(Bytes[Index]);
-        }
+        static_cast<Ptr<Writer>>(Context)->Write(static_cast<ConstPtr<Byte>>(Data), static_cast<UInt32>(Size));
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -50,18 +43,19 @@ namespace Studio::Texture
             return Blob();
         }
 
-        Sequence<Byte> Output;
+        const SInt32         Width  = Pixels.GetWidth();
+        const SInt32         Height = Pixels.GetHeight();
+        const ConstPtr<Byte> Data   = Pixels.GetPixels().GetData();
 
-        const SInt32 Width  = Pixels.GetWidth();
-        const SInt32 Height = Pixels.GetHeight();
+        Writer Output;
 
-        if (!stbi_write_png_to_func(Collect, AddressOf(Output), Width, Height, 4, Pixels.GetPixels().GetData(), Width * 4))
+        if (!stbi_write_png_to_func(Collect, AddressOf(Output), Width, Height, 4, Data, Width * 4))
         {
             LOG_E("Texture: failed to encode a {0}x{1} picture", Width, Height);
 
             return Blob();
         }
-        return Blob::Copy(ConstSpan<Byte>(Output.GetData(), Output.GetSize()));
+        return Output.Detach();
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -78,7 +72,7 @@ namespace Studio::Texture
 
         Filesystem::Ensure(Path);
 
-        if (Filesystem::Write(Path, ConstSpan<Byte>(Output.GetData(), Output.GetSize())) != Filesystem::Result::Success)
+        if (Filesystem::Write(Path, Output) != Filesystem::Result::Success)
         {
             LOG_E("Texture: failed to write '{0}'", Path);
 

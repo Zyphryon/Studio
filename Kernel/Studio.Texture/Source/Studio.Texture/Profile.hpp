@@ -20,52 +20,65 @@
 
 namespace Studio::Texture
 {
-    /// \brief Settings that control how a source bitmap is baked into the engine's native texture format.
+    /// \brief Represents the settings a source image is baked into a native texture with.
     struct Profile final
     {
-        /// The target texture format; `Unspecified` infers one from the source's channel count.
-        ZyGraphic::TextureFormat Format   = ZyGraphic::TextureFormat::Unspecified;
-
-        /// Generate a full mip chain down to 1x1; when `false` only the base level is kept.
-        Bool                     Mipmaps  = false;
-
-        /// Treat the source as linear-encoded colour, selecting a linear texture format.
-        Bool                     Linear   = true;
-
-        /// LZ4-compress the pixel payload.
-        Bool                     Compress = true;
-
-        /// Write a lone 2D image as a one-slice array, for programs that only sample arrays.
-        Bool                     Layered  = false;
-
-        /// \brief A pair of numbers naming how an atlas divides, left zeroed when it was not asked for.
+        /// \brief Represents a width and a height, both zero when the switch was not given.
         struct Extent final
         {
-            /// The measurement across.
+            /// The size across.
             UInt16 Width  = 0;
 
-            /// The measurement down.
+            /// The size down.
             UInt16 Height = 0;
 
-            /// \brief Checks whether the pair names a division at all.
+            /// \brief Checks whether the extent was given at all.
             ///
-            /// \return `true` when both axes carry a measurement, otherwise `false`.
+            /// \return `true` if both sides are above zero, otherwise `false`.
             ZY_INLINE Bool IsValid() const
             {
                 return Width > 0 && Height > 0;
             }
         };
 
+        /// The format to write, or `Unspecified` to keep the source's own depth and channel count.
+        ZyGraphic::TextureFormat Format   = ZyGraphic::TextureFormat::Unspecified;
+
+        /// Whether a full mip chain down to 1x1 is generated, rather than the base level alone.
+        Bool                     Mipmaps  = false;
+
+        /// Whether the source holds linear values; `false` for colour art authored in sRGB.
+        Bool                     Linear   = true;
+
+        /// Whether the payload is LZ4-compressed, which is only kept when it comes out smaller.
+        Bool                     Compress = true;
+
+        /// Whether a lone 2D image is written as a one-slice array, for shaders that only sample arrays.
+        Bool                     Layered  = false;
+
         /// The grid a cube atlas packs its six faces in, counted in faces.
-        Extent                 Cube;
+        Extent                   Cube;
 
-        /// The extent of one slice of an array atlas, counted in texels.
-        Extent                 Slice;
+        /// The size of one slice of an array atlas, counted in texels.
+        Extent                   Slice;
 
-        /// \brief Reads these settings from a parsed command line.
+        /// \brief Gets the layout a texture is written as, given the one it was decoded or packed as.
         ///
-        /// \param Environment The parsed command line.
-        /// \return The resolved settings.
+        /// \param Layout The layout the slices were decoded or packed as.
+        /// \return A one-slice array if \ref Layered is set and \p Layout is a plain 2D texture, otherwise \p Layout.
+        ZY_INLINE ZyGraphic::TextureLayout GetLayout(ZyGraphic::TextureLayout Layout) const
+        {
+            if (Layered && Layout == ZyGraphic::TextureLayout::Texture2D)
+            {
+                return ZyGraphic::TextureLayout::Texture2DArray;
+            }
+            return Layout;
+        }
+
+        /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
+        ///
+        /// \param Environment The parsed switches.
+        /// \return The settings, left at their defaults where a switch is missing.
         static Profile From(ConstRef<Environment> Environment);
     };
 }

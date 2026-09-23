@@ -25,7 +25,7 @@ namespace Studio::Texture
     {
         const Text Value = Environment.GetText(Name, Text::Empty());
 
-        // The switch is optional, so its absence is a division never asked for rather than a fault.
+        // A missing switch is not an error: it just means nothing is cut.
         if (Value.IsEmpty())
         {
             return Profile::Extent();
@@ -34,7 +34,6 @@ namespace Studio::Texture
         UInt         Cursor = 0;
         const UInt32 Width  = StrExtractNumber<10, UInt32>(Value, Cursor);
 
-        // The axes are joined by an 'x', so anything else means the pair was not written as one.
         if (Cursor >= Value.GetSize() || (Value[Cursor] != 'x' && Value[Cursor] != 'X'))
         {
             LOG_E("Texture: '--{0}' expects '<width>x<height>', which '{1}' is not", Name, Value);
@@ -47,7 +46,7 @@ namespace Studio::Texture
 
         if (Width == 0 || Height == 0 || Width > 0xFFFF || Height > 0xFFFF)
         {
-            LOG_E("Texture: '--{0}' was given '{1}', which no atlas divides by", Name, Value);
+            LOG_E("Texture: '--{0}' was given '{1}', which is too small or too large to cut by", Name, Value);
 
             return Profile::Extent();
         }

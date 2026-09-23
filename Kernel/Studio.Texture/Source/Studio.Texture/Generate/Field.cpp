@@ -18,9 +18,6 @@
 
 namespace Studio::Texture
 {
-    /// \brief The base of the natural logarithm, which a gaussian's falloff is a power of.
-    static constexpr Real32 kEuler = 2.718281828f;
-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -28,7 +25,7 @@ namespace Studio::Texture
         : mWidth  { Width },
           mHeight { Height }
     {
-        mValues.Resize(static_cast<UInt>(Width) * Height, 0.0f);
+        mValues.Fill(0.0f, static_cast<UInt>(Width) * Height);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -62,17 +59,17 @@ namespace Studio::Texture
             return;
         }
 
-        // Three spreads either side hold all but a sliver of a gaussian's weight.
+        // Three sigmas either side hold more than 99% of a gaussian's weight.
         const SInt32 Radius = Max(1, static_cast<SInt32>(Ceil(Sigma * 3.0f)));
 
         Sequence<Real32> Kernel;
-        Kernel.Resize(static_cast<UInt>(Radius) * 2 + 1, 0.0f);
+        Kernel.Fill(0.0f, static_cast<UInt>(Radius) * 2 + 1);
 
         Real32 Total = 0.0f;
 
         for (SInt32 Offset = -Radius; Offset <= Radius; ++Offset)
         {
-            const Real32 Weight = Pow(kEuler, -static_cast<Real32>(Offset * Offset) / (2.0f * Sigma * Sigma));
+            const Real32 Weight = Pow(2.718281828f, -static_cast<Real32>(Offset * Offset) / (2.0f * Sigma * Sigma));
 
             Kernel[Offset + Radius] = Weight;
             Total += Weight;
@@ -83,7 +80,8 @@ namespace Studio::Texture
             Weight /= Total;
         }
 
-        // A gaussian separates into a pass across and a pass down, which is far cheaper than the square.
+        // A gaussian is separable, so a pass across and then a pass down equal the full 2D kernel at a fraction
+        // of the cost.
         Field Across(mWidth, mHeight);
 
         for (SInt32 Y = 0; Y < mHeight; ++Y)
@@ -145,7 +143,6 @@ namespace Studio::Texture
                     Value = Pixel.GetAlpha();
                     break;
                 default:
-                    // Rec. 709 weights, on the linear colour the canvas already holds.
                     Value = Pixel.GetRed() * 0.2126f + Pixel.GetGreen() * 0.7152f + Pixel.GetBlue() * 0.0722f;
                     break;
                 }

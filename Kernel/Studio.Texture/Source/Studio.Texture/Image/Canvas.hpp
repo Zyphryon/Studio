@@ -20,7 +20,7 @@
 
 namespace Studio::Texture
 {
-    /// \brief Represents one level of pixels as linear RGBA floats, the form generators and composers work in.
+    /// \brief Represents one level of pixels as linear RGBA floats, for the generators and the composer to draw on.
     class Canvas final
     {
     public:
@@ -45,7 +45,7 @@ namespace Studio::Texture
 
         /// \brief Checks whether the canvas holds any pixels.
         ///
-        /// \return `true` when the canvas has an extent, otherwise `false`.
+        /// \return `true` if the canvas has an extent, otherwise `false`.
         ZY_INLINE Bool IsValid() const
         {
             return mWidth > 0 && mHeight > 0;
@@ -74,11 +74,11 @@ namespace Studio::Texture
         /// \return The pixel, in linear space.
         Color Get(UInt32 X, UInt32 Y) const;
 
-        /// \brief Reads one pixel, with coordinates outside the canvas clamped to its edge or wrapped around it.
+        /// \brief Reads one pixel, clamping or wrapping coordinates that fall outside the canvas.
         ///
         /// \param X    The column, which may fall outside the canvas.
         /// \param Y    The row, which may fall outside the canvas.
-        /// \param Wrap `true` to wrap around the edges as a tiling texture does, `false` to clamp to them.
+        /// \param Wrap `true` to wrap around the edges, as a tiling texture does, `false` to clamp to them.
         /// \return The pixel, in linear space.
         Color Fetch(SInt32 X, SInt32 Y, Bool Wrap) const;
 
@@ -100,17 +100,19 @@ namespace Studio::Texture
         /// \param ToY    The top edge the rectangle lands at in this canvas.
         void Blit(ConstRef<Canvas> Source, UInt32 FromX, UInt32 FromY, UInt32 Width, UInt32 Height, UInt32 ToX, UInt32 ToY);
 
+        /// \brief Converts the canvas into a single-level bitmap of another format.
+        ///
+        /// \param Format The format to write, which also decides whether colour is stored linear or as sRGB.
+        /// \return The bitmap, or an empty one if the format cannot be written.
+        Bitmap To(ZyGraphic::TextureFormat Format) const;
+
+    public:
+
         /// \brief Converts the base level of a bitmap into a canvas.
         ///
         /// \param Source The bitmap to read, in any format the transcoder reads.
-        /// \return The canvas, or an empty one when the bitmap cannot be read.
+        /// \return The canvas, or an empty one if the bitmap cannot be read.
         static Canvas From(ConstRef<Bitmap> Source);
-
-        /// \brief Converts the canvas into a single-level bitmap of another format.
-        ///
-        /// \param Format The format to write, which decides whether the colour is stored as linear or as sRGB.
-        /// \return The bitmap, or an empty one when the format cannot be written.
-        Bitmap To(ZyGraphic::TextureFormat Format) const;
 
     private:
 

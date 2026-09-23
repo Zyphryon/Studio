@@ -22,25 +22,6 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Str Resolve(Text Folder, Text Source)
-    {
-        // An absolute path stands on its own; anything else hangs off the tracker's folder.
-        const Bool Absolute = (Source.GetSize() > 1 && Source[1] == ':') || (!Source.IsEmpty() && Source[0] == '/');
-
-        if (Absolute || Folder.IsEmpty())
-        {
-            return Str(Source);
-        }
-
-        Str Result(Folder);
-        Result.Append('/');
-        Result.Append(Source);
-        return Result;
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
     Composer::Composer(ConstRef<Baker> Baker, Text Folder, ConstRef<Profile> Profile)
         : mBaker   { Baker },
           mFolder  { Folder },
@@ -68,11 +49,17 @@ namespace Studio::Texture
                 Entry.From = Area(0, 0, Source->GetWidth(), Source->GetHeight());
             }
 
-            if (Entry.From.X + Entry.From.Width > Source->GetWidth() || Entry.From.Y + Entry.From.Height > Source->GetHeight())
+            if (   Entry.From.X + Entry.From.Width  > Source->GetWidth()
+                || Entry.From.Y + Entry.From.Height > Source->GetHeight())
             {
-                LOG_E("Texture: '{0}' takes {1}x{2} at {3},{4}, which leaves its {5}x{6} source", Entry.Name,
-                    Entry.From.Width, Entry.From.Height, Entry.From.X, Entry.From.Y,
-                    Source->GetWidth(), Source->GetHeight());
+                LOG_E("Texture: '{0}' takes {1}x{2} at {3},{4}, which leaves its {5}x{6} source",
+                    Entry.Name,
+                    Entry.From.Width,
+                    Entry.From.Height,
+                    Entry.From.X,
+                    Entry.From.Y,
+                    Source->GetWidth(),
+                    Source->GetHeight());
 
                 return false;
             }
@@ -126,7 +113,8 @@ namespace Studio::Texture
             Canvas Cut(Entry.From.Width, Entry.From.Height);
             Cut.Blit(Source, Entry.From.X, Entry.From.Y, Entry.From.Width, Entry.From.Height, 0, 0);
 
-            // A frame gathered into an array stands at the array's size, whatever it was drawn at.
+            // A region whose place is another size, as in an array where every slice is the largest region's size,
+            // is resized to fit.
             if (Cut.GetWidth() != Place.Width || Cut.GetHeight() != Place.Height)
             {
                 Cut = Canvas::From(Resampler::Resize(Cut.To(Canvas::kFormat), Place.Width, Place.Height));
@@ -135,7 +123,7 @@ namespace Studio::Texture
             Ref<Canvas> Page = Pages[Entry.Slice];
             Page.Blit(Cut, 0, 0, Place.Width, Place.Height, Place.X, Place.Y);
 
-            // The edge is repeated outward, so a filter reading past the region finds the region and not a neighbour.
+            // The edge is repeated outward, so a filter reading past the region samples its own edge, not a neighbour.
             const SInt32 Reach = Atlas.Extrude;
 
             for (SInt32 Y = -Reach; Y < Place.Height + Reach; ++Y)
@@ -154,7 +142,7 @@ namespace Studio::Texture
             }
         }
 
-        // The slices are written in the tracker's format, or, when it names none, in the first source's.
+        // The slices take the tracker's format, else the profile's, else the first source's.
         if (Atlas.Format == ZyGraphic::TextureFormat::Unspecified)
         {
             Atlas.Format = (mProfile.Format != ZyGraphic::TextureFormat::Unspecified) ? mProfile.Format : mFirst;
@@ -185,7 +173,7 @@ namespace Studio::Texture
             return Found;
         }
 
-        const Surface Decoded = mBaker.Load(Resolve(mFolder, Source), mProfile);
+        const Surface Decoded = mBaker.Load(Tracker::Resolve(mFolder, Source), mProfile);
 
         if (!Decoded.IsValid())
         {

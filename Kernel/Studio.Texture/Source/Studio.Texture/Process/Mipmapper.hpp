@@ -31,7 +31,7 @@ namespace Studio::Texture
         ///
         /// \param Source The single-level bitmap to expand.
         /// \param Levels The number of levels to produce, including the base level.
-        /// \return A bitmap holding the whole chain, or an invalid bitmap when the source cannot be filtered.
+        /// \return A bitmap holding the whole chain, or an invalid bitmap if the source cannot be filtered.
         static Bitmap Generate(AnyRef<Bitmap> Source, UInt8 Levels);
     };
 }

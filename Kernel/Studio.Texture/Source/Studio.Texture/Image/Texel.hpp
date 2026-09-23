@@ -20,10 +20,10 @@
 
 namespace Studio::Texture
 {
-    /// \brief The widest interleaved layout handled, and the size of the scratch a texel unpacks into.
+    /// \brief The most channels a texel carries, which is also the size of the scratch it unpacks into.
     static constexpr UInt32 kMaxComponents = 4;
 
-    /// \brief The storage kind a single texel channel takes.
+    /// \brief Specifies how one channel of a texel is stored.
     enum class Component : UInt8
     {
         UInt8,      ///< 8-bit unsigned normalized.
@@ -34,18 +34,18 @@ namespace Studio::Texture
         Real32,     ///< 32-bit floating-point.
     };
 
-    /// \brief The colour-space step a conversion has to take.
+    /// \brief Specifies the colour-space conversion a transcode applies between its two ends.
     enum class Gamma : UInt8
     {
-        None,       ///< Both ends share a space, so no transfer applies.
+        None,       ///< Both ends share a colour space, so values pass as they are.
         Linear,     ///< The source is sRGB-encoded and the target is linear.
         sRGB,       ///< The source is linear and the target is sRGB-encoded.
     };
 
-    /// \brief Resolves the storage kind a format's channels take.
+    /// \brief Gets how the channels of a format are stored.
     ///
-    /// \param Format The format description to classify.
-    /// \return The matching storage kind.
+    /// \param Format The format to classify.
+    /// \return The storage of each channel.
     ZY_INLINE Component GetComponent(ConstRef<ZyGraphic::TextureMetadata> Format)
     {
         const UInt32 Bits = Format.BitsPerComponent();
@@ -61,11 +61,11 @@ namespace Studio::Texture
         return (Bits == 16) ? Component::UInt16 : Component::UInt8;
     }
 
-    /// \brief Resolves the colour-space step between two ends of a conversion.
+    /// \brief Gets the colour-space conversion between two ends of a transcode.
     ///
-    /// \param Source `true` when the source is sRGB-encoded.
-    /// \param Target `true` when the target is sRGB-encoded.
-    /// \return The step to apply.
+    /// \param Source `true` if the source is sRGB-encoded.
+    /// \param Target `true` if the target is sRGB-encoded.
+    /// \return The conversion to apply.
     ZY_INLINE Gamma GetGamma(Bool Source, Bool Target)
     {
         if (Source == Target)
@@ -75,25 +75,25 @@ namespace Studio::Texture
         return Source ? Gamma::Linear : Gamma::sRGB;
     }
 
-    /// \brief The sRGB transfer, tabulated in both directions.
+    /// \brief Represents the sRGB transfer as lookup tables, so eight-bit channels never evaluate the curve.
     struct Curve final
     {
-        /// \brief The number of steps an eight-bit channel can take, which is what makes sRGB tabulatable.
+        /// \brief The number of values an eight-bit channel can hold.
         static constexpr UInt32 kSteps = 256;
 
-        /// \brief The resolution of the encode grid, which only has to get within a byte of the right answer.
+        /// \brief The number of entries in the encode hint, which only has to land close to the right byte.
         static constexpr UInt32 kGrid  = 4096;
 
         /// The linear value of each encoded byte.
         Array<Real32, kSteps>     Linear;
 
-        /// An approximate encoded byte, indexed by the square root of a linear value.
+        /// The approximate encoded byte of a linear value, indexed by the value's square root.
         Array<Byte, kGrid>        Hint;
 
         /// The lowest linear value that encodes to each byte above zero.
         Array<Real32, kSteps - 1> Boundary;
 
-        /// \brief Samples the engine's transfer into every table.
+        /// \brief Constructs every table by sampling the engine's own transfer.
         Curve()
         {
             for (UInt32 Step = 0; Step < kSteps; ++Step)
@@ -130,8 +130,8 @@ namespace Studio::Texture
 
         /// \brief Finds the lowest linear value that encodes to a given step.
         ///
-        /// Non-negative floats order the same way as their bit patterns, so the search bisects the pattern
-        /// rather than the value and lands exactly on the boundary instead of near it.
+        /// \note Non-negative floats sort the same way as their bit patterns, so the search bisects the bits
+        ///       rather than the value and lands exactly on the boundary instead of near it.
         ///
         /// \param Level The encoded step to find the boundary of, in the range `[1, 255]`.
         /// \return The lowest linear value \ref Sample maps to that step.
@@ -163,6 +163,8 @@ namespace Studio::Texture
             return Result;
         }
     };
+
+    /// \brief The sRGB tables, built once when the program starts.
     inline const Curve kCurve;
 
     /// \brief Encodes a linear value as an sRGB byte.
@@ -175,6 +177,7 @@ namespace Studio::Texture
 
         UInt32 Step = kCurve.Hint[static_cast<UInt32>(Sqrt(Unit) * (Curve::kGrid - 1))];
 
+        // The hint lands a step or so away, so a short walk against the boundaries finds the exact byte.
         while (Step < Curve::kSteps - 1 && Unit >= kCurve.Boundary[Step])
         {
             ++Step;
@@ -188,7 +191,8 @@ namespace Studio::Texture
 
     /// \brief Decodes one channel as a normalized or floating-point value.
     ///
-    /// \param Source The address of the channel.
+    /// \tparam Type   The type the channel is stored as.
+    /// \param  Source The address of the channel.
     /// \return The decoded value.
     template<typename Type>
     ZY_INLINE Real32 Decode(ConstPtr<Byte> Source)
@@ -233,8 +237,9 @@ namespace Studio::Texture
 
     /// \brief Encodes one channel from a normalized or floating-point value.
     ///
-    /// \param Target The address of the channel.
-    /// \param Value  The value to write.
+    /// \tparam Type   The type the channel is stored as.
+    /// \param  Target The address of the channel.
+    /// \param  Value  The value to write.
     template<typename Type>
     ZY_INLINE void Encode(Ptr<Byte> Target, Real32 Value)
     {
@@ -275,8 +280,11 @@ namespace Studio::Texture
 
     /// \brief Reads one texel as a linear-space colour.
     ///
-    /// \param Source The address of the level.
-    /// \param Index  The texel index within the level.
+    /// \tparam Type     The type each channel is stored as.
+    /// \tparam Channels The number of channels a texel carries.
+    /// \tparam sRGB     `true` if the colour channels are sRGB-encoded.
+    /// \param  Source   The address of the level.
+    /// \param  Index    The texel index within the level.
     /// \return The texel, in linear space.
     template<typename Type, UInt32 Channels, Bool sRGB>
     ZY_INLINE Color Load(ConstPtr<Byte> Source, UInt32 Index)
@@ -308,9 +316,12 @@ namespace Studio::Texture
 
     /// \brief Writes one texel from a linear-space colour.
     ///
-    /// \param Target The address of the level.
-    /// \param Index  The texel index within the level.
-    /// \param Value  The texel to write, in linear space.
+    /// \tparam Type     The type each channel is stored as.
+    /// \tparam Channels The number of channels a texel carries.
+    /// \tparam sRGB     `true` if the colour channels are sRGB-encoded.
+    /// \param  Target   The address of the level.
+    /// \param  Index    The texel index within the level.
+    /// \param  Value    The texel to write, in linear space.
     template<typename Type, UInt32 Channels, Bool sRGB>
     ZY_INLINE void Store(Ptr<Byte> Target, UInt32 Index, ConstRef<Color> Value)
     {
@@ -318,7 +329,7 @@ namespace Studio::Texture
 
         Color Result = Value;
 
-        // Any width other than eight bits has no grid to reach for, so it evaluates the curve.
+        // Only eight-bit channels have a table, so any other width evaluates the curve itself.
         if constexpr (sRGB && !IsAnyOf<Type, UInt8>)
         {
             Result = Result.ToSRGB();

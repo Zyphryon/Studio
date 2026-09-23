@@ -20,7 +20,7 @@
 
 namespace Studio::Texture
 {
-    /// \brief Draws a greyscale relief map, white at the surface and darker as it sinks, out of an image.
+    /// \brief Draws a greyscale relief map out of an image: white where it is raised, darker as it sinks.
     class Relief final
     {
     public:
@@ -28,46 +28,46 @@ namespace Studio::Texture
         /// \brief Specifies how a bevel rises from the outline of the art to its full height.
         enum class Shape : UInt8
         {
-            Linear,     ///< A straight ramp, as a chamfer.
-            Round,      ///< A quarter circle, as a pillow.
-            Sharp,      ///< A curve that stays low and rises late, as a blade.
-            Plateau,    ///< A smooth step with a flat top, as a coin.
+            Linear,     ///< A straight ramp, like a chamfer.
+            Round,      ///< A quarter circle, like a pillow.
+            Sharp,      ///< A curve that stays low and rises late, like a blade.
+            Plateau,    ///< A smooth step with a flat top, like a coin.
         };
 
-        /// \brief Represents the knobs a relief map is drawn with.
+        /// \brief Represents the settings a relief map is drawn with.
         struct Settings final
         {
             /// The part of each pixel read as its height.
             Channel Source     = Channel::Luminance;
 
-            /// Whether the height is turned upside down, so dark reads as raised.
+            /// Whether the height is inverted, so dark reads as raised.
             Bool    Invert     = false;
 
-            /// The spread the height is smoothed by, in pixels.
+            /// The blur applied to the height, in pixels.
             Real32  Blur       = 0.0f;
 
-            /// The height read as the bottom; anything below sinks to it.
+            /// The height read as the bottom; anything below is clamped to it.
             Real32  Low        = 0.0f;
 
-            /// The height read as the top; anything above rises to it.
+            /// The height read as the top; anything above is clamped to it.
             Real32  High       = 1.0f;
 
-            /// How far the heights spread about their middle; above one hardens the relief, below softens it.
+            /// The spread of the heights about their middle; above one hardens the relief, below softens it.
             Real32  Contrast   = 1.0f;
 
-            /// How far every height is lifted, before the contrast is applied.
+            /// The amount added to every height, before the contrast is applied.
             Real32  Brightness = 0.0f;
 
-            /// The curve the heights are bent by; above one sinks the middle tones, below lifts them.
+            /// The exponent the heights are raised to; above one sinks the middle tones, below lifts them.
             Real32  Gamma      = 1.0f;
 
-            /// The distance from the outline at which the art reaches its full height, in pixels; zero for none.
+            /// The distance from the outline at which the art reaches full height, in pixels; zero for no bevel.
             Real32  Bevel      = 0.0f;
 
-            /// How the bevel rises.
+            /// The shape the bevel rises in.
             Shape   Profile    = Shape::Round;
 
-            /// How much of the image's own height rides on the bevel; zero for the bevel's shape alone.
+            /// The share of the image's own height kept on top of the bevel; zero for the bevel alone.
             Real32  Detail     = 1.0f;
 
             /// Whether the edges wrap around, as they do for a texture that tiles.
@@ -76,7 +76,7 @@ namespace Studio::Texture
             /// Whether transparent pixels sink to the bottom.
             Bool    Masked     = true;
 
-            /// \brief Reads the settings from a command line or any bag with the same accessors.
+            /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
             ///
             /// \param Environment The parsed switches.
             /// \return The settings, left at their defaults where a switch is missing.
@@ -88,8 +88,8 @@ namespace Studio::Texture
         /// \brief Draws the relief map of an image.
         ///
         /// \param Source   The image read as a height.
-        /// \param Settings The knobs the map is drawn with.
-        /// \return The map, its height in RGB alike and the source's alpha kept.
+        /// \param Settings The settings the map is drawn with.
+        /// \return The map, the height repeated in RGB, with the source's alpha kept.
         static Canvas Generate(ConstRef<Canvas> Source, ConstRef<Settings> Settings);
     };
 }

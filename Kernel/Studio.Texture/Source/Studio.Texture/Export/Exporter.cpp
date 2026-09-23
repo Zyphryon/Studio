@@ -63,7 +63,11 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Blob Exporter::Export(Ref<ZyJob::Service> Scheduler, AnyRef<Sequence<Bitmap>> Slices, ZyGraphic::TextureLayout Layout, ConstRef<Profile> Profile)
+    Blob Exporter::Export(
+        Ref<ZyJob::Service>      Scheduler,
+        AnyRef<Sequence<Bitmap>> Slices,
+        ZyGraphic::TextureLayout Layout,
+        ConstRef<Profile>        Profile)
     {
         if (Slices.IsEmpty())
         {
@@ -73,8 +77,8 @@ namespace Studio::Texture
         const UInt16 Width  = Slices[0].GetWidth();
         const UInt16 Height = Slices[0].GetHeight();
 
-        const ZyGraphic::TextureFormat Format =
-            (Profile.Format == ZyGraphic::TextureFormat::Unspecified) ? Slices[0].GetFormat() : Profile.Format;
+        const ZyGraphic::TextureFormat Format
+            = (Profile.Format == ZyGraphic::TextureFormat::Unspecified) ? Slices[0].GetFormat() : Profile.Format;
 
         if (!IsSupported(Format))
         {

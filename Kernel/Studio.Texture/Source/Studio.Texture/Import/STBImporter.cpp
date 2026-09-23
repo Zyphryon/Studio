@@ -88,7 +88,7 @@ namespace Studio::Texture
 
         // Three-channel pixels have no 8-bit or 16-bit engine format, and sRGB exists only as a four-channel
         // variant, so both cases expand to RGBA. One and two channel sources keep their width.
-        const Bool   Expand  = (Channels == 3) || (sRGB && Channels < 4);
+        const Bool   Expand  = Channels == 3 || (sRGB && Channels < 4);
         const SInt32 Request = Expand ? STBI_rgb_alpha : Channels;
 
         if (sRGB && Channels < 3)
@@ -100,15 +100,18 @@ namespace Studio::Texture
 
         if (Real)
         {
-            Pixels = static_cast<Ptr<void>>(stbi_loadf_from_memory(Encoded, Length, AddressOf(Width), AddressOf(Height), AddressOf(Channels), Request));
+            Pixels = static_cast<Ptr<void>>(
+                stbi_loadf_from_memory(Encoded, Length, AddressOf(Width), AddressOf(Height), AddressOf(Channels), Request));
         }
         else if (Wide)
         {
-            Pixels = static_cast<Ptr<void>>(stbi_load_16_from_memory(Encoded, Length, AddressOf(Width), AddressOf(Height), AddressOf(Channels), Request));
+            Pixels = static_cast<Ptr<void>>(
+                stbi_load_16_from_memory(Encoded, Length, AddressOf(Width), AddressOf(Height), AddressOf(Channels), Request));
         }
         else
         {
-            Pixels = static_cast<Ptr<void>>(stbi_load_from_memory(Encoded, Length, AddressOf(Width), AddressOf(Height), AddressOf(Channels), Request));
+            Pixels = static_cast<Ptr<void>>(
+                stbi_load_from_memory(Encoded, Length, AddressOf(Width), AddressOf(Height), AddressOf(Channels), Request));
         }
 
         if (Pixels == nullptr)

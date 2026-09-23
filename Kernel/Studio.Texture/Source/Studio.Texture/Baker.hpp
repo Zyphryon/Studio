@@ -42,22 +42,19 @@ namespace Studio::Texture
 
         /// \brief Registers an importer under each extension it accepts.
         ///
-        /// An extension another importer already claims is taken over by \p Codec, which is how a host
-        /// overrides a built-in decoder with its own.
-        ///
         /// \param Codec The importer to register.
         void Register(ConstRetainer<Importer> Codec);
 
         /// \brief Unregisters whichever importer claims an extension.
         ///
         /// \param Type The source extension, with or without its leading dot.
-        /// \return `true` when an importer was unregistered, otherwise `false`.
+        /// \return `true` if an importer was unregistered, otherwise `false`.
         Bool Unregister(Text Type);
 
         /// \brief Finds the importer that claims a source extension.
         ///
         /// \param Type The source extension, with or without its leading dot.
-        /// \return The matching importer, or `nullptr` when no importer claims the extension.
+        /// \return The matching importer, or `nullptr` if no importer claims the extension.
         ConstPtr<Importer> Find(Text Type) const;
 
         /// \brief Gets every extension this baker accepts, keyed to the importer that claims it.
@@ -71,15 +68,15 @@ namespace Studio::Texture
         /// \brief Reads and decodes a source image on disk.
         ///
         /// \param Path    The source path, whose extension selects the importer.
-        /// \param Profile The settings describing how the source is interpreted.
-        /// \return The decoded surface, or an invalid surface when the file cannot be read or decoded.
+        /// \param Profile The settings the source is decoded with.
+        /// \return The decoded surface, or an invalid surface if the file cannot be read or decoded.
         Surface Load(Text Path, ConstRef<Profile> Profile) const;
 
-        /// \brief Writes decoded bitmaps in the engine's native texture format.
+        /// \brief Encodes bitmaps that are already decoded into the engine's native texture format.
         ///
         /// \param Slices  The bitmaps to write, one per array slice or cube face.
         /// \param Layout  The layout the slices compose.
-        /// \param Profile The settings controlling format, mipmaps, and compression.
+        /// \param Profile The settings controlling format, mipmaps and compression.
         /// \return A blob holding the native texture bytes, or an empty blob on failure.
         Blob Encode(AnyRef<Sequence<Bitmap>> Slices, ZyGraphic::TextureLayout Layout, ConstRef<Profile> Profile) const;
 
@@ -96,7 +93,7 @@ namespace Studio::Texture
         /// \param Source      The source image path, whose extension selects the importer.
         /// \param Destination The native output path; any folder in it that does not exist yet is created.
         /// \param Profile     The settings controlling the bake.
-        /// \return `true` when the texture was written, otherwise `false`.
+        /// \return `true` if the texture was written, otherwise `false`.
         Bool Bake(Text Source, Text Destination, ConstRef<Profile> Profile) const;
 
     private:

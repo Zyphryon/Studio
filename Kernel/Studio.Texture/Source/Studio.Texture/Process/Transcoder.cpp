@@ -29,7 +29,7 @@ namespace Studio::Texture
     {
         const UInt32 Shared = Min(SourceChannels, kMaxComponents);
 
-        // Either direction of the transfer collapses into a table.
+        // An eight-bit end of an sRGB conversion goes through the lookup tables instead of the curve.
         constexpr Bool TabledDecode = (Transfer == Gamma::Linear) && IsAnyOf<From, UInt8>;
         constexpr Bool TabledEncode = (Transfer == Gamma::sRGB)   && IsAnyOf<To, UInt8>;
 
@@ -56,7 +56,7 @@ namespace Studio::Texture
 
             Color Value(Components[0], Components[1], Components[2], Components[3]);
 
-            // Whichever end the tables covered needs nothing further here.
+            // When a table already did the conversion, there is nothing left to apply here.
             if constexpr (Transfer == Gamma::Linear && !TabledDecode)
             {
                 Value = Value.ToLinear();
@@ -154,7 +154,7 @@ namespace Studio::Texture
             return Bitmap();
         }
 
-        // Matching formats already agree on layout, so the surface passes straight through.
+        // Already in the target format, so the bitmap is handed back as it is.
         if (Format == Source.GetFormat())
         {
             return Move(Source);

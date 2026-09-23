@@ -18,25 +18,6 @@
 
 namespace Studio::Texture
 {
-    /// \brief A free rectangle of one page, in whole pixels.
-    struct Space final
-    {
-        /// The left edge.
-        UInt32 X      = 0;
-
-        /// The top edge.
-        UInt32 Y      = 0;
-
-        /// The width.
-        UInt32 Width  = 0;
-
-        /// The height.
-        UInt32 Height = 0;
-    };
-
-    /// \brief The free space left on one page, kept as the largest rectangles that still fit (the MaxRects method).
-    using Page = Sequence<Space>;
-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -54,7 +35,7 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Bool Contains(ConstRef<Space> Outer, ConstRef<Space> Inner)
+    static Bool Contains(ConstRef<Area> Outer, ConstRef<Area> Inner)
     {
         return Inner.X >= Outer.X && Inner.Y >= Outer.Y
             && Inner.X + Inner.Width  <= Outer.X + Outer.Width
@@ -64,23 +45,21 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Bool Find(ConstRef<Page> Free, UInt32 Width, UInt32 Height, Ref<Space> Output, Ref<UInt32> Score)
+    static Bool Find(ConstRef<Sequence<Area>> Free, UInt32 Width, UInt32 Height, Ref<Area> Output, Ref<UInt32> Score)
     {
         Bool Found = false;
 
         // Best short side fit: the free rectangle leaving the thinnest sliver along its tighter side.
-        for (ConstRef<Space> Candidate : Free)
+        for (ConstRef<Area> Candidate : Free)
         {
             if (Candidate.Width < Width || Candidate.Height < Height)
             {
                 continue;
             }
 
-            const UInt32 Short = Min(Candidate.Width - Width, Candidate.Height - Height);
-
-            if (!Found || Short < Score)
+            if (const UInt32 Short = Min(Candidate.Width - Width, Candidate.Height - Height); !Found || Short < Score)
             {
-                Output = Space(Candidate.X, Candidate.Y, Width, Height);
+                Output = Area(Candidate.X, Candidate.Y, static_cast<UInt16>(Width), static_cast<UInt16>(Height));
                 Score  = Short;
                 Found  = true;
             }
@@ -91,12 +70,12 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static void Occupy(Ref<Page> Free, ConstRef<Space> Used)
+    static void Occupy(Ref<Sequence<Area>> Free, ConstRef<Area> Used)
     {
-        Page Next;
+        Sequence<Area> Next;
 
         // Every free rectangle the placement overlaps is split into what is left of it on each of its four sides.
-        for (ConstRef<Space> Candidate : Free)
+        for (ConstRef<Area> Candidate : Free)
         {
             const Bool Apart = Used.X >= Candidate.X + Candidate.Width  || Used.X + Used.Width  <= Candidate.X
                             || Used.Y >= Candidate.Y + Candidate.Height || Used.Y + Used.Height <= Candidate.Y;
@@ -109,25 +88,23 @@ namespace Studio::Texture
 
             if (Used.X > Candidate.X)
             {
-                Next.Append(Space(Candidate.X, Candidate.Y, Used.X - Candidate.X, Candidate.Height));
+                Next.Append(Candidate.X, Candidate.Y, Used.X - Candidate.X, Candidate.Height);
             }
             if (Used.X + Used.Width < Candidate.X + Candidate.Width)
             {
-                Next.Append(Space(Used.X + Used.Width, Candidate.Y,
-                    Candidate.X + Candidate.Width - (Used.X + Used.Width), Candidate.Height));
+                Next.Append(Used.X + Used.Width, Candidate.Y, Candidate.X + Candidate.Width - (Used.X + Used.Width), Candidate.Height);
             }
             if (Used.Y > Candidate.Y)
             {
-                Next.Append(Space(Candidate.X, Candidate.Y, Candidate.Width, Used.Y - Candidate.Y));
+                Next.Append(Candidate.X, Candidate.Y, Candidate.Width, Used.Y - Candidate.Y);
             }
             if (Used.Y + Used.Height < Candidate.Y + Candidate.Height)
             {
-                Next.Append(Space(Candidate.X, Used.Y + Used.Height,
-                    Candidate.Width, Candidate.Y + Candidate.Height - (Used.Y + Used.Height)));
+                Next.Append(Candidate.X, Used.Y + Used.Height, Candidate.Width, Candidate.Y + Candidate.Height - (Used.Y + Used.Height));
             }
         }
 
-        // A rectangle wholly inside another adds nothing the other does not already offer.
+        // A rectangle lying wholly inside another is dropped, since the larger one already offers that space.
         Free.Clear();
 
         for (UInt Index = 0; Index < Next.GetSize(); ++Index)
@@ -148,6 +125,96 @@ namespace Studio::Texture
                 Free.Append(Next[Index]);
             }
         }
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Bool Place(Ref<Tracker> Atlas,
+        ConstRef<Sequence<UInt>>   Order,
+        ConstRef<Packer::Settings> Settings, UInt32 Width, UInt32 Height, Bool Spill, Ref<UInt> Failed)
+    {
+        const UInt32 Border = Settings.Extrude * 2u + Settings.Padding;
+        const Area   Blank(0, 0, static_cast<UInt16>(Width), static_cast<UInt16>(Height));
+
+        // Each page holds its free space as the largest rectangles that still fit (the MaxRects method).
+        Sequence<Sequence<Area>> Pages;
+        Pages.Append().Append(Blank);
+
+        for (const UInt Index : Order)
+        {
+            Ref<Region> Entry = Atlas.Regions[Index];
+
+            const UInt32 Across = Entry.Rect.Width  + Border;
+            const UInt32 Down   = Entry.Rect.Height + Border;
+
+            Area   Best;
+            UInt32 BestScore = 0;
+            UInt   BestPage  = 0;
+            Bool   Found     = false;
+
+            for (UInt Number = 0; Number < Pages.GetSize(); ++Number)
+            {
+                Area   Candidate;
+                UInt32 Score = 0;
+
+                if (Find(Pages[Number], Across, Down, Candidate, Score) && (!Found || Score < BestScore))
+                {
+                    Best      = Candidate;
+                    BestScore = Score;
+                    BestPage  = Number;
+                    Found     = true;
+                }
+            }
+
+            if (!Found && Spill)
+            {
+                Pages.Append().Append(Blank);
+
+                BestPage = Pages.GetSize() - 1;
+                Found    = Find(Pages[BestPage], Across, Down, Best, BestScore);
+            }
+
+            if (!Found)
+            {
+                Failed = Index;
+                return false;
+            }
+
+            Occupy(Pages[BestPage], Best);
+
+            Entry.Slice  = static_cast<UInt16>(BestPage);
+            Entry.Rect.X = static_cast<UInt16>(Best.X + Settings.Extrude);
+            Entry.Rect.Y = static_cast<UInt16>(Best.Y + Settings.Extrude);
+        }
+        return true;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Bool Grow(Ref<UInt32> Width, Ref<UInt32> Height, ConstRef<Packer::Settings> Settings)
+    {
+        if (Width >= Settings.Width && Height >= Settings.Height)
+        {
+            return false;
+        }
+
+        // The shorter side doubles, so the bin stays close to square instead of growing into a strip.
+        if (Settings.Square)
+        {
+            Width  = Min<UInt32>(Width  * 2, Settings.Width);
+            Height = Min<UInt32>(Height * 2, Settings.Height);
+        }
+        else if ((Width <= Height && Width < Settings.Width) || Height >= Settings.Height)
+        {
+            Width  = Min<UInt32>(Width  * 2, Settings.Width);
+        }
+        else
+        {
+            Height = Min<UInt32>(Height * 2, Settings.Height);
+        }
+        return true;
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -179,10 +246,7 @@ namespace Studio::Texture
             return false;
         }
 
-        Atlas.Padding = Settings.Padding;
-        Atlas.Extrude = Settings.Extrude;
-
-        // An array stands every region on a slice of its own, all at the size of the largest.
+        // An array gives every region a slice of its own, each the size of the largest region.
         if (Settings.Layout == Mode::Array)
         {
             UInt16 Width  = 0;
@@ -201,21 +265,13 @@ namespace Studio::Texture
                 Entry.Rect  = Area(0, 0, Width, Height);
             }
 
-            Atlas.Layout = ZyGraphic::TextureLayout::Texture2DArray;
-            Atlas.Width  = Width;
-            Atlas.Height = Height;
-            Atlas.Slices = static_cast<UInt16>(Atlas.Regions.GetSize());
+            Atlas.Layout  = ZyGraphic::TextureLayout::Texture2DArray;
+            Atlas.Width   = Width;
+            Atlas.Height  = Height;
+            Atlas.Slices  = static_cast<UInt16>(Atlas.Regions.GetSize());
             Atlas.Padding = 0;
             Atlas.Extrude = 0;
             return true;
-        }
-
-        // Largest first packs tightest, while the tracker keeps the order the regions were authored in.
-        Sequence<UInt> Order;
-
-        for (UInt Index = 0; Index < Atlas.Regions.GetSize(); ++Index)
-        {
-            Order.Append(Index);
         }
 
         const auto Covering = [&](UInt Index)
@@ -224,83 +280,92 @@ namespace Studio::Texture
             return static_cast<UInt32>(Size.Width) * Size.Height;
         };
 
-        for (UInt Index = 1; Index < Order.GetSize(); ++Index)
-        {
-            const UInt Moving = Order[Index];
-            UInt       Slot   = Index;
+        // Regions are placed largest first, which packs tightest, while the tracker keeps the order they were
+        // authored in. Equal areas keep that order too, so the same input always packs the same way.
+        Sequence<UInt> Order;
 
-            while (Slot > 0 && Covering(Order[Slot - 1]) < Covering(Moving))
-            {
-                Order[Slot] = Order[Slot - 1];
-                --Slot;
-            }
-            Order[Slot] = Moving;
+        for (UInt Index = 0; Index < Atlas.Regions.GetSize(); ++Index)
+        {
+            Order.Append(Index);
         }
+
+        Order.Sort([&](UInt Left, UInt Right)
+        {
+            const UInt32 First  = Covering(Left);
+            const UInt32 Second = Covering(Right);
+
+            return First > Second || (First == Second && Left < Right);
+        });
 
         const UInt32 Border = Settings.Extrude * 2u + Settings.Padding;
 
-        Sequence<Page> Pages;
-        Pages.Append().Append(Space(0, 0, Settings.Width, Settings.Height));
+        UInt64 Total   = 0;
+        UInt32 Widest  = 0;
+        UInt32 Tallest = 0;
 
+        for (ConstRef<Region> Entry : Atlas.Regions)
+        {
+            Total  += static_cast<UInt64>(Entry.Rect.Width + Border) * (Entry.Rect.Height + Border);
+            Widest  = Max<UInt32>(Widest,  Entry.Rect.Width  + Border);
+            Tallest = Max<UInt32>(Tallest, Entry.Rect.Height + Border);
+        }
+
+        // The search starts from the smallest bin that could hold every region, and grows it until they all fit.
+        UInt32 Width  = Min<UInt32>(RoundUp(Widest,  0xFFFF), Settings.Width);
+        UInt32 Height = Min<UInt32>(RoundUp(Tallest, 0xFFFF), Settings.Height);
+
+        if (Settings.Square)
+        {
+            Width  = Min<UInt32>(Max(Width, Height), Settings.Width);
+            Height = Min<UInt32>(Max(Width, Height), Settings.Height);
+        }
+
+        while (static_cast<UInt64>(Width) * Height < Total && Grow(Width, Height, Settings))
+        {
+        }
+
+        UInt Failed = 0;
+        Bool Placed = Place(Atlas, Order, Settings, Width, Height, false, Failed);
+
+        while (!Placed && Grow(Width, Height, Settings))
+        {
+            Placed = Place(Atlas, Order, Settings, Width, Height, false, Failed);
+        }
+
+        // Regions spill onto further slices only once one slice at its largest cannot hold them all.
+        if (!Placed && Settings.Pages)
+        {
+            Placed = Place(Atlas, Order, Settings, Settings.Width, Settings.Height, true, Failed);
+        }
+
+        if (!Placed)
+        {
+            ConstRef<Region> Entry = Atlas.Regions[Failed];
+
+            LOG_E("Texture: '{0}' ({1}x{2}) does not fit a {3}x{4} slice{5}", Entry.Name,
+                Entry.Rect.Width, Entry.Rect.Height, Settings.Width, Settings.Height,
+                Settings.Pages ? ""_Text : ", and '--pages' is off"_Text);
+
+            return false;
+        }
+
+        // The placed regions give the slice count and how far their space reaches, border included.
+        UInt32 Pages  = 0;
         UInt32 Right  = 0;
         UInt32 Bottom = 0;
 
-        for (const UInt Index : Order)
+        for (ConstRef<Region> Entry : Atlas.Regions)
         {
-            Ref<Region> Entry = Atlas.Regions[Index];
-
-            const UInt32 Width  = Entry.Rect.Width  + Border;
-            const UInt32 Height = Entry.Rect.Height + Border;
-
-            Space  Best;
-            UInt32 BestScore = 0;
-            UInt   BestPage  = 0;
-            Bool   Found     = false;
-
-            for (UInt Number = 0; Number < Pages.GetSize(); ++Number)
-            {
-                Space  Candidate;
-                UInt32 Score = 0;
-
-                if (Find(Pages[Number], Width, Height, Candidate, Score) && (!Found || Score < BestScore))
-                {
-                    Best      = Candidate;
-                    BestScore = Score;
-                    BestPage  = Number;
-                    Found     = true;
-                }
-            }
-
-            if (!Found && Settings.Pages)
-            {
-                Pages.Append().Append(Space(0, 0, Settings.Width, Settings.Height));
-
-                BestPage = Pages.GetSize() - 1;
-                Found    = Find(Pages[BestPage], Width, Height, Best, BestScore);
-            }
-
-            if (!Found)
-            {
-                LOG_E("Texture: '{0}' ({1}x{2}) does not fit a {3}x{4} slice{5}", Entry.Name,
-                    Entry.Rect.Width, Entry.Rect.Height, Settings.Width, Settings.Height,
-                    Settings.Pages ? ""_Text : ", and '--pages' is off"_Text);
-
-                return false;
-            }
-
-            Occupy(Pages[BestPage], Best);
-
-            Entry.Slice  = static_cast<UInt16>(BestPage);
-            Entry.Rect.X = static_cast<UInt16>(Best.X + Settings.Extrude);
-            Entry.Rect.Y = static_cast<UInt16>(Best.Y + Settings.Extrude);
-
-            Right  = Max(Right,  Best.X + Best.Width);
-            Bottom = Max(Bottom, Best.Y + Best.Height);
+            Pages  = Max<UInt32>(Pages,  Entry.Slice + 1u);
+            Right  = Max<UInt32>(Right,  Entry.Rect.X + Entry.Rect.Width  + Settings.Extrude + Settings.Padding);
+            Bottom = Max<UInt32>(Bottom, Entry.Rect.Y + Entry.Rect.Height + Settings.Extrude + Settings.Padding);
         }
 
-        // Every slice shares one extent, so it shrinks to what the fullest page used.
-        UInt32 Width  = (Pages.GetSize() > 1) ? Settings.Width  : Right;
-        UInt32 Height = (Pages.GetSize() > 1) ? Settings.Height : Bottom;
+        // Every slice of an array shares one extent, so only a lone slice shrinks to what it used.
+        const Bool Paged = Pages > 1;
+
+        Width  = Paged ? Settings.Width  : Right;
+        Height = Paged ? Settings.Height : Bottom;
 
         if (Settings.PowerOfTwo)
         {
@@ -314,12 +379,12 @@ namespace Studio::Texture
             Height = Width;
         }
 
-        Atlas.Width  = static_cast<UInt16>(Width);
-        Atlas.Height = static_cast<UInt16>(Height);
-        Atlas.Slices = static_cast<UInt16>(Pages.GetSize());
-        Atlas.Layout = (Pages.GetSize() > 1)
-            ? ZyGraphic::TextureLayout::Texture2DArray
-            : ZyGraphic::TextureLayout::Texture2D;
+        Atlas.Layout  = Paged ? ZyGraphic::TextureLayout::Texture2DArray : ZyGraphic::TextureLayout::Texture2D;
+        Atlas.Width   = static_cast<UInt16>(Width);
+        Atlas.Height  = static_cast<UInt16>(Height);
+        Atlas.Slices  = static_cast<UInt16>(Pages);
+        Atlas.Padding = Settings.Padding;
+        Atlas.Extrude = Settings.Extrude;
         return true;
     }
 }

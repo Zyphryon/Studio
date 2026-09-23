@@ -30,7 +30,7 @@ namespace Studio::Texture
         Alpha,      ///< The alpha channel alone.
     };
 
-    /// \brief Represents one number per pixel, the height every generator starts from.
+    /// \brief Represents one height per pixel, which is what the normal and relief generators start from.
     class Field final
     {
     public:
@@ -90,6 +90,8 @@ namespace Studio::Texture
         /// \param Sigma The spread, in pixels; zero or less leaves the field as it is.
         /// \param Wrap  `true` to wrap around the edges, `false` to clamp to them.
         void Blur(Real32 Sigma, Bool Wrap);
+
+    public:
 
         /// \brief Reads the height of every pixel of a canvas.
         ///

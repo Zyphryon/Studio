@@ -114,7 +114,7 @@ namespace Studio::Texture
             return Bitmap();
         }
 
-        // The source lends nothing but one channel, so it is filtered to the target's extent before it is read.
+        // Only one channel of the source is used, so it is simply resized to the target before it is read.
         const Bitmap Fitted = Resampler::Resize(Source, Target.GetWidth(), Target.GetHeight());
 
         if (Fitted.GetPixels().IsEmpty())

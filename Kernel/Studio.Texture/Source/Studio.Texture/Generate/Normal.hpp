@@ -25,52 +25,52 @@ namespace Studio::Texture
     {
     public:
 
-        /// \brief Specifies the difference a slope is measured with.
+        /// \brief Specifies the filter a slope is measured with.
         enum class Kernel : UInt8
         {
             Central,    ///< The two neighbours along the axis; the sharpest, and the noisiest.
-            Sobel,      ///< A 3x3 difference weighted toward the centre row; the usual choice.
-            Scharr,     ///< A 3x3 difference tuned to answer the same in every direction.
-            Prewitt,    ///< A 3x3 difference weighing its three rows alike; the softest.
+            Sobel,      ///< A 3x3 filter weighted toward the centre row; the usual choice.
+            Scharr,     ///< A 3x3 filter tuned to respond the same in every direction.
+            Prewitt,    ///< A 3x3 filter that weighs its three rows alike; the softest.
         };
 
-        /// \brief Represents the knobs a normal map is drawn with.
+        /// \brief Represents the settings a normal map is drawn with.
         struct Settings final
         {
             /// The part of each pixel read as its height.
             Channel Source   = Channel::Luminance;
 
-            /// The difference slopes are measured with.
+            /// The filter slopes are measured with.
             Kernel  Filter   = Kernel::Sobel;
 
-            /// How steep a unit of height reads, which is how deep the art looks.
+            /// The steepness one unit of height reads as, which sets how deep the art looks.
             Real32  Strength = 2.0f;
 
-            /// The spread the height is smoothed by before it is measured, in pixels.
+            /// The blur applied to the height before it is measured, in pixels.
             Real32  Blur     = 0.0f;
 
-            /// The number of scales measured and added, each twice as coarse as the one before.
+            /// The number of scales measured and summed, each twice as coarse as the one before.
             UInt8   Octaves  = 1;
 
-            /// The weight each coarser scale carries relative to the one before it.
+            /// The weight of each coarser scale relative to the one before it.
             Real32  Falloff  = 0.5f;
 
-            /// Whether the height is turned upside down, so dark reads as raised.
+            /// Whether the height is inverted, so dark reads as raised.
             Bool    Invert   = false;
 
-            /// Whether the across axis is mirrored.
+            /// Whether the X axis is mirrored.
             Bool    FlipX    = false;
 
-            /// Whether the up axis is mirrored, for programs that read a normal's green pointing down.
+            /// Whether the Y axis is mirrored, for programs that expect green to point down.
             Bool    FlipY    = false;
 
             /// Whether the edges wrap around, as they do for a texture that tiles.
             Bool    Wrap     = false;
 
-            /// Whether transparent pixels are ground, so the outline of the art stands up as an edge.
+            /// Whether transparent pixels are treated as ground, so the art's outline stands up as an edge.
             Bool    Masked   = true;
 
-            /// \brief Reads the settings from a command line or any bag with the same accessors.
+            /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
             ///
             /// \param Environment The parsed switches.
             /// \return The settings, left at their defaults where a switch is missing.
@@ -82,8 +82,8 @@ namespace Studio::Texture
         /// \brief Draws the normal map of an image.
         ///
         /// \param Source   The image read as a height.
-        /// \param Settings The knobs the map is drawn with.
-        /// \return The map, its direction in RGB over zero through one and the source's alpha kept.
+        /// \param Settings The settings the map is drawn with.
+        /// \return The map, each normal packed from [-1, 1] into [0, 1] in RGB, with the source's alpha kept.
         static Canvas Generate(ConstRef<Canvas> Source, ConstRef<Settings> Settings);
     };
 }

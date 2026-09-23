@@ -32,10 +32,10 @@ namespace Studio::Texture
             Array,      ///< One region to a slice, each filling it.
         };
 
-        /// \brief Represents the knobs a layout is worked out with.
+        /// \brief Represents the settings a layout is worked out with.
         struct Settings final
         {
-            /// How the regions are laid out.
+            /// The way the regions are laid out.
             Mode   Layout     = Mode::Atlas;
 
             /// The widest a slice may grow, in pixels.
@@ -59,7 +59,7 @@ namespace Studio::Texture
             /// Whether regions that do not fit spill onto further slices, making the texture an array.
             Bool   Pages      = false;
 
-            /// \brief Reads the settings from a command line or any bag with the same accessors.
+            /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
             ///
             /// \param Environment The parsed switches.
             /// \return The settings, left at their defaults where a switch is missing.
@@ -70,11 +70,11 @@ namespace Studio::Texture
 
         /// \brief Works out where every region of a tracker sits.
         ///
-        /// \note Every region must already know its size, which is the extent of what it takes from its source.
+        /// \note Every region's `Rect` must already hold its size, which \ref Composer::Measure fills in.
         ///
         /// \param Atlas    The tracker whose regions are placed, and whose extent, slices and layout are set.
-        /// \param Settings The knobs the layout is worked out with.
-        /// \return `true` when every region found a place, otherwise `false`.
+        /// \param Settings The settings the layout is worked out with.
+        /// \return `true` if every region found a place, otherwise `false`.
         static Bool Pack(Ref<Tracker> Atlas, ConstRef<Settings> Settings);
     };
 }

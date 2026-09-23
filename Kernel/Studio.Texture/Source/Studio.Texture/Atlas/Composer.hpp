@@ -27,28 +27,28 @@ namespace Studio::Texture
     {
     public:
 
-        /// \brief Constructs a composer reading sources through a baker.
+        /// \brief Constructs a composer that reads sources through a baker.
         ///
         /// \param Baker   The baker whose importers read the sources, which must outlive the composer.
-        /// \param Folder  The folder a region's source is relative to, which is the tracker's own.
+        /// \param Folder  The folder the tracker sits in, which every region's source is relative to.
         /// \param Profile The settings sources are read with and slices are written in.
         Composer(ConstRef<Baker> Baker, Text Folder, ConstRef<Profile> Profile);
 
-        /// \brief Reads every region's source and fills in whatever the region leaves to it.
+        /// \brief Reads every region's source and fills in the sizes the region leaves out.
         ///
-        /// \note A region taking no part of its source takes all of it, and one not yet placed takes that size.
+        /// \note A region with no `From` takes the whole source, and one with no `Rect` takes the size of its `From`.
         ///
         /// \param Atlas The tracker whose regions are measured.
-        /// \return `true` when every source was read and every part it names lies inside it, otherwise `false`.
+        /// \return `true` if every source was read and every `From` lies inside its source, otherwise `false`.
         Bool Measure(Ref<Tracker> Atlas);
 
-        /// \brief Draws every slice of a placed tracker.
+        /// \brief Draws every slice of a tracker whose regions are already placed.
         ///
-        /// \note A region whose place differs in size from what it takes is filtered into its place.
+        /// \note A region whose `Rect` differs in size from its `From` is resized to fit.
         ///
-        /// \param Atlas  The tracker to draw, whose format is settled here when it names none.
+        /// \param Atlas  The tracker to draw, whose format is settled here if it names none.
         /// \param Output Receives one bitmap per slice, in the tracker's format.
-        /// \return `true` when every slice was drawn, otherwise `false`.
+        /// \return `true` if every slice was drawn, otherwise `false`.
         Bool Compose(Ref<Tracker> Atlas, Ref<Sequence<Bitmap>> Output);
 
     private:
@@ -56,7 +56,7 @@ namespace Studio::Texture
         /// \brief Gets a source, reading it the first time it is asked for.
         ///
         /// \param Source The source, relative to the composer's folder.
-        /// \return The source's first slice, or `nullptr` when it cannot be read.
+        /// \return The source's first slice, or `nullptr` if it cannot be read.
         ConstPtr<Canvas> Fetch(Text Source);
 
     private:

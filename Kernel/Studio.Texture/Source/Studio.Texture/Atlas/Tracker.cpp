@@ -23,12 +23,12 @@ namespace Studio::Texture
 
     static Area ReadArea(ConstRef<JsonArray> Values)
     {
-        if (Values.IsNullOrEmpty() || Values.GetSize() != 4)
+        if (!Values.IsNullOrEmpty() && Values.GetSize() == 4)
         {
-            return Area();
+            return Area(Values.GetNumber<UInt16>(0), Values.GetNumber<UInt16>(1),
+                        Values.GetNumber<UInt16>(2), Values.GetNumber<UInt16>(3));
         }
-        return Area(Values.GetNumber<UInt16>(0), Values.GetNumber<UInt16>(1),
-                    Values.GetNumber<UInt16>(2), Values.GetNumber<UInt16>(3));
+        return Area();
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -45,6 +45,51 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+    static Bool IsAbsolute(Text Path)
+    {
+        return (Path.GetSize() > 1 && Path[1] == ':') || (!Path.IsEmpty() && (Path[0] == '/' || Path[0] == '\\'));
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Sequence<Text> Split(Text Path)
+    {
+        Sequence<Text> Parts;
+
+        UInt Start = 0;
+
+        for (UInt Index = 0; Index <= Path.GetSize(); ++Index)
+        {
+            if (Index < Path.GetSize() && Path[Index] != '/' && Path[Index] != '\\')
+            {
+                continue;
+            }
+
+            const Text Part = Path.Slice(Start, Index - Start);
+            Start = Index + 1;
+
+            // A '..' cancels the folder before it, unless that one is a '..' too.
+            if (Part == "..")
+            {
+                if (!Parts.IsEmpty() && !(Parts.GetBack() == ".."))
+                {
+                    Parts.RemoveLast();
+                    continue;
+                }
+                Parts.Append(Part);
+            }
+            else if (!Part.IsEmpty() && !(Part == "."))
+            {
+                Parts.Append(Part);
+            }
+        }
+        return Parts;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
     Bool Tracker::Read(Text Path, Ref<Tracker> Output)
     {
         Blob Input;
@@ -56,15 +101,17 @@ namespace Studio::Texture
             return false;
         }
 
-        JsonValue        Document = JsonDocument::Parse(Text(Input.GetData<Char>(), Input.GetSize()));
-        const JsonObject Root(Document);
+        JsonValue Document = JsonDocument::Parse(Text(Input.GetData<Char>(), Input.GetSize()));
 
-        if (!Root.IsValid())
+        // A `JsonObject` assumes it wraps an object, so the document is checked before it is wrapped.
+        if (!Document.IsObject())
         {
             LOG_E("Texture: '{0}' is not a JSON tracker", Path);
 
             return false;
         }
+
+        const JsonObject Root(Document);
 
         if (const UInt32 Version = Root.GetNumber<UInt32>("Version", 0); Version != kVersion)
         {
@@ -113,7 +160,9 @@ namespace Studio::Texture
 
     Bool Tracker::Write(Text Path) const
     {
-        JsonValue  Document;
+        JsonValue Document;
+        Document.SetObject();
+
         JsonObject Root(Document);
 
         Root.SetNumber<UInt32>("Version", kVersion);
@@ -145,12 +194,12 @@ namespace Studio::Texture
             Entry.SetNumber<UInt16>("Slice", Value.Slice);
             WriteArea(Entry.SetArray("Rect"), Value.Rect);
 
-            // The crop is what a sprite and a sheet sample by: the rectangle as shares of its slice.
+            // The crop is the rectangle a sprite or a sheet samples by, as fractions of its slice.
             JsonArray Crop = Entry.SetArray("Crop");
             Crop.AddNumber<Real32>(Value.Rect.X * Across);
             Crop.AddNumber<Real32>(Value.Rect.Y * Down);
-            Crop.AddNumber<Real32>((Value.Rect.X + Value.Rect.Width)  * Across);
-            Crop.AddNumber<Real32>((Value.Rect.Y + Value.Rect.Height) * Down);
+            Crop.AddNumber<Real32>(static_cast<Real32>(Value.Rect.X + Value.Rect.Width)  * Across);
+            Crop.AddNumber<Real32>(static_cast<Real32>(Value.Rect.Y + Value.Rect.Height) * Down);
         }
 
         const Str Content = JsonDocument::Dump(Document, "    ");
@@ -163,6 +212,81 @@ namespace Studio::Texture
 
             return false;
         }
+        return true;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Str Tracker::Resolve(Text Folder, Text Path)
+    {
+        if (IsAbsolute(Path) || Folder.IsEmpty())
+        {
+            return Str(Path);
+        }
+
+        Str Result(Folder);
+        Result.Append('/');
+        Result.Append(Path);
+        return Result;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Tracker::Relate(Text Folder, Text Path, Ref<Str> Output)
+    {
+        const Bool Absolute = IsAbsolute(Path);
+
+        if (!Absolute && IsAbsolute(Folder))
+        {
+            LOG_E("Texture: '{0}' is relative and '{1}' is absolute, so one cannot be written against the other",
+                Path, Folder);
+
+            return false;
+        }
+
+        const Sequence<Text> From = Split(Folder);
+        const Sequence<Text> To   = Split(Path);
+
+        UInt Common = 0;
+
+        while (Common < From.GetSize() && Common + 1 < To.GetSize() && StrEqualCaseInsensitive(From[Common], To[Common]))
+        {
+            ++Common;
+        }
+
+        // Two absolute paths with nothing in common sit on different drives, so the path is kept as it is.
+        if (Absolute && Common == 0)
+        {
+            Output = Str(Path);
+            return true;
+        }
+
+        Str Result;
+
+        for (UInt Index = Common; Index < From.GetSize(); ++Index)
+        {
+            // Stepping out of a folder that is itself a '..' would need the name of the folder above it.
+            if (From[Index] == "..")
+            {
+                LOG_E("Texture: '{0}' cannot be written against '{1}'", Path, Folder);
+
+                return false;
+            }
+            Result.Append("../");
+        }
+
+        for (UInt Index = Common; Index < To.GetSize(); ++Index)
+        {
+            if (Index > Common)
+            {
+                Result.Append('/');
+            }
+            Result.Append(To[Index]);
+        }
+
+        Output = Move(Result);
         return true;
     }
 }
