@@ -64,8 +64,7 @@ namespace Studio::Texture
             return Surface();
         }
 
-        // Every later stage reads one texel at a time, which a block-compressed or bit-packed payload cannot
-        // offer without a decoder this baker does not have.
+        // Later stages read one texel at a time, which a compressed or packed payload cannot give.
         const ZyGraphic::TextureMetadata Description = ZyGraphic::GetTextureMetadata(Format);
 
         if (Description.IsCompressed() || Description.IsPacked || !Description.IsSampler())
@@ -75,8 +74,7 @@ namespace Studio::Texture
             return Surface();
         }
 
-        // The payload is gathered slice-major, each slice holding its whole chain, so the two counts in the
-        // header fix exactly how long it must be.
+        // Slices follow one another with their whole chain, so the header fixes the payload's length.
         const UInt32 Stride = ZyGraphic::GetLevelOffset(Format, Width, Height, Levels);
 
         if (static_cast<UInt64>(Stride) * Layers != Size)
@@ -87,8 +85,7 @@ namespace Studio::Texture
             return Surface();
         }
 
-        // `Size` is the uncompressed byte count, so a shorter payload is compressed. LZ4 covers every slice in
-        // one block, which has to be decoded whole before any slice can be cut out of it.
+        // A payload shorter than `Size` is one LZ4 block over every slice, so it is decoded whole.
         Blob Scratch;
 
         if (Size != Payload.GetSize())
@@ -105,8 +102,7 @@ namespace Studio::Texture
 
         const ConstPtr<Byte> Pixels = (Scratch == nullptr ? Payload.GetData() : Scratch.GetData<Byte>());
 
-        // Every stage after an importer takes a single level, so each slice is read back at its base level
-        // alone and the chain above it is filtered again when the bake asks for one.
+        // Later stages take a single level, so each slice keeps its base level and the chain is built again.
         const UInt32 Length = ZyGraphic::GetLevelSize(Format, Width, Height, 0);
 
         Surface Result;

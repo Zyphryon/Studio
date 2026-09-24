@@ -20,7 +20,7 @@
 
 namespace Studio::Texture
 {
-    /// \brief Represents decoded pixels in one texture format, as they travel from an importer to the exporter.
+    /// \brief Represents decoded pixels in one texture format.
     class Bitmap final
     {
     public:
@@ -44,8 +44,8 @@ namespace Studio::Texture
         /// \param Format The format the pixels are stored in.
         /// \param Width  The width of the base level, in pixels.
         /// \param Height The height of the base level, in pixels.
-        /// \param Levels The number of mip levels \p Data holds, including the base level.
-        /// \param Data   The tightly packed pixels, each level following the one above it.
+        /// \param Levels The number of levels, the base included.
+        /// \param Data   The packed pixels, level after level.
         ZY_INLINE Bitmap(Format Format, UInt16 Width, UInt16 Height, UInt8 Levels, AnyRef<Blob> Data)
             : mFormat { Format },
               mWidth  { Width },

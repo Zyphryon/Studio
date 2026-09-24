@@ -13,6 +13,7 @@
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 #include "Tracker.hpp"
+#include "Studio.Texture/Profile.hpp"
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -36,45 +37,46 @@ namespace Studio::Texture
         struct Settings final
         {
             /// The way the regions are laid out.
-            Mode   Layout     = Mode::Atlas;
+            Mode            Layout     = Mode::Atlas;
 
             /// The widest a slice may grow, in pixels.
-            UInt16 Width      = 2048;
+            UInt16          Width      = 2048;
 
             /// The tallest a slice may grow, in pixels.
-            UInt16 Height     = 2048;
+            UInt16          Height     = 2048;
+
+            /// The size of every array slice, or invalid for the largest region's.
+            Profile::Extent Extent;
 
             /// The empty pixels kept between neighbouring regions.
-            UInt16 Padding    = 1;
+            UInt16          Padding    = 1;
 
             /// The pixels each region's edge is repeated outward by.
-            UInt16 Extrude    = 0;
+            UInt16          Extrude    = 0;
 
             /// Whether each side of a slice is rounded up to a power of two.
-            Bool   PowerOfTwo = true;
+            Bool            PowerOfTwo = true;
 
             /// Whether a slice is kept square.
-            Bool   Square     = false;
+            Bool            Square     = false;
 
-            /// Whether regions that do not fit spill onto further slices, making the texture an array.
-            Bool   Pages      = false;
+            /// Whether regions that do not fit spill onto further slices.
+            Bool            Pages      = false;
 
-            /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
+            /// \brief Reads the settings from a command line.
             ///
             /// \param Environment The parsed switches.
-            /// \return The settings, left at their defaults where a switch is missing.
+            /// \return The settings, with defaults where a switch is missing.
             static Settings From(ConstRef<Environment> Environment);
         };
 
     public:
 
-        /// \brief Works out where every region of a tracker sits.
+        /// \brief Works out where every measured region of a tracker sits.
         ///
-        /// \note Every region's `Rect` must already hold its size, which \ref Composer::Measure fills in.
-        ///
-        /// \param Atlas    The tracker whose regions are placed, and whose extent, slices and layout are set.
-        /// \param Settings The settings the layout is worked out with.
-        /// \return `true` if every region found a place, otherwise `false`.
+        /// \param Atlas    The tracker to place.
+        /// \param Settings The settings to lay it out with.
+        /// \return `true` if every region fit, otherwise `false`.
         static Bool Pack(Ref<Tracker> Atlas, ConstRef<Settings> Settings);
     };
 }

@@ -43,7 +43,7 @@ namespace Studio::Texture
             /// The filter slopes are measured with.
             Kernel  Filter   = Kernel::Sobel;
 
-            /// The steepness one unit of height reads as, which sets how deep the art looks.
+            /// The steepness one unit of height reads as.
             Real32  Strength = 2.0f;
 
             /// The blur applied to the height before it is measured, in pixels.
@@ -67,13 +67,13 @@ namespace Studio::Texture
             /// Whether the edges wrap around, as they do for a texture that tiles.
             Bool    Wrap     = false;
 
-            /// Whether transparent pixels are treated as ground, so the art's outline stands up as an edge.
+            /// Whether transparent pixels are ground, so the outline stands up.
             Bool    Masked   = true;
 
-            /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
+            /// \brief Reads the settings from a command line.
             ///
             /// \param Environment The parsed switches.
-            /// \return The settings, left at their defaults where a switch is missing.
+            /// \return The settings, with defaults where a switch is missing.
             static Settings From(ConstRef<Environment> Environment);
         };
 
@@ -82,8 +82,8 @@ namespace Studio::Texture
         /// \brief Draws the normal map of an image.
         ///
         /// \param Source   The image read as a height.
-        /// \param Settings The settings the map is drawn with.
-        /// \return The map, each normal packed from [-1, 1] into [0, 1] in RGB, with the source's alpha kept.
+        /// \param Settings The settings to draw with.
+        /// \return The map, normals packed into RGB and the alpha kept.
         static Canvas Generate(ConstRef<Canvas> Source, ConstRef<Settings> Settings);
     };
 }

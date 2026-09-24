@@ -33,16 +33,15 @@ namespace Studio::Texture
         /// \brief Encodes a canvas as an eight-bit RGBA PNG.
         ///
         /// \param Source The canvas to encode.
-        /// \param sRGB   `true` to store colour sRGB-encoded, as art is; `false` to store the values as they are,
-        ///               as data such as a normal or relief map is.
+        /// \param sRGB   `true` to store colour sRGB-encoded, `false` to store values as they are.
         /// \return The PNG bytes, or an empty blob if the canvas is empty.
         static Blob Encode(ConstRef<Canvas> Source, Bool sRGB);
 
-        /// \brief Encodes a canvas as a PNG and writes it to disk.
+        /// \brief Encodes a canvas as a PNG and writes it to disk, creating its folder.
         ///
-        /// \param Path   The file to write; any folder in it that does not exist yet is created.
+        /// \param Path   The file to write.
         /// \param Source The canvas to encode.
-        /// \param sRGB   `true` to store colour sRGB-encoded, `false` to store the values as they are.
+        /// \param sRGB   `true` to store colour sRGB-encoded, `false` to store values as they are.
         /// \return `true` if the file was written, otherwise `false`.
         static Bool Write(Text Path, ConstRef<Canvas> Source, Bool sRGB);
     };

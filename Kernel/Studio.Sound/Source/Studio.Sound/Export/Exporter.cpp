@@ -33,6 +33,8 @@ namespace Studio::Sound
 
     static UInt8 Compress(Ref<SInt32> Predictor, Ref<SInt32> Step, SInt16 Value)
     {
+        using namespace ZyAudio::Codec;
+
         SInt32 Delta  = Value - Predictor;
         UInt8  Nibble = 0;
 
@@ -43,7 +45,7 @@ namespace Studio::Sound
         }
 
         // Each of the three magnitude bits halves the step it compares against, as the decoder expands them.
-        SInt32 Size  = ZyAudio::Codec::Adaptive::kStepTable[Step];
+        SInt32 Size  = Adaptive::kStepTable[Step];
         SInt32 Total = Size >> 3;
 
         if (Delta >= Size)
@@ -71,7 +73,7 @@ namespace Studio::Sound
         }
 
         Predictor = Clamp<SInt32>(Predictor + ((Nibble & 0x8) ? -Total : Total), -32768, 32767);
-        Step      = Clamp<SInt32>(Step + ZyAudio::Codec::Adaptive::kStepIndex[Nibble], 0, ZyAudio::Codec::Adaptive::kStepLimit);
+        Step      = Clamp<SInt32>(Step + Adaptive::kStepIndex[Nibble], 0, Adaptive::kStepLimit);
         return Nibble;
     }
 
@@ -268,7 +270,8 @@ namespace Studio::Sound
                 Copy(Input, Length * Stride, Samples.GetData() + Origin * Stride);
             }
 
-            const SInt32 Written = ::opus_encode_float(Encoder, Input, kPacketFrames, Packet.GetData<Byte>(), kPacketBytes);
+            const SInt32 Written
+                = ::opus_encode_float(Encoder, Input, kPacketFrames, Packet.GetData<Byte>(), kPacketBytes);
 
             if (Written < 0)
             {

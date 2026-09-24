@@ -21,32 +21,32 @@
 
 namespace Studio::Application
 {
-    /// \brief Provides the texture commands: bake, pack, build, normal, relief and extract.
+    /// \brief Provides the texture commands: bake, pack, build, normal, relief, extract and formats.
     class TextureDomain final
     {
     public:
 
         /// \brief Constructs the domain with every importer the build enables.
         ///
-        /// \param Scheduler The pool textures are baked on, which must outlive the domain.
+        /// \param Scheduler The job pool, which must outlive the domain.
         explicit TextureDomain(Ref<ZyJob::Service> Scheduler);
 
         /// \brief Checks whether a command belongs to this domain.
         ///
-        /// \param Command The command name, as typed.
-        /// \return `true` if this domain runs the command, otherwise `false`.
+        /// \param Command The command name.
+        /// \return `true` if this domain runs it, otherwise `false`.
         Bool Claims(Text Command) const;
 
         /// \brief Checks whether this domain bakes a source, which is how `bake` finds its domain.
         ///
-        /// \param Source The source path, whose extension decides.
-        /// \return `true` if an importer of this domain reads the source, otherwise `false`.
+        /// \param Source The source path.
+        /// \return `true` if this domain reads it, otherwise `false`.
         Bool Reads(Text Source) const;
 
         /// \brief Runs one of this domain's commands.
         ///
-        /// \param Command The command name, which must be one this domain claims.
-        /// \param Parsed  The parsed command line, whose first operand is the command itself.
+        /// \param Command The command name.
+        /// \param Parsed  The parsed command line.
         /// \return How the command ended.
         Outcome Run(Text Command, ConstRef<Environment> Parsed) const;
 
@@ -55,7 +55,7 @@ namespace Studio::Application
 
     private:
 
-        /// \brief Describes one command: the name it is typed as and the member that runs it.
+        /// \brief Represents one command: the name it is typed as and the member that runs it.
         struct Entry final
         {
             /// The name the command is typed as.
@@ -67,8 +67,8 @@ namespace Studio::Application
 
         /// \brief Finds the command typed under a name.
         ///
-        /// \param Name The command name, as typed.
-        /// \return The command, or `nullptr` if this domain has none by that name.
+        /// \param Name The command name.
+        /// \return The command, or `nullptr` if there is none.
         static ConstPtr<Entry> Find(Text Name);
 
         /// \brief Bakes one source image into a native texture.
@@ -101,32 +101,23 @@ namespace Studio::Application
         /// \return How the command ended.
         Outcome Relief(ConstRef<Environment> Parsed) const;
 
-        /// \brief Writes every slice of a texture out as a picture, for art that goes back to an image editor.
+        /// \brief Writes every slice of a texture out as a picture.
         ///
         /// \param Parsed The parsed command line.
         /// \return How the command ended.
         Outcome Extract(ConstRef<Environment> Parsed) const;
 
-        /// \brief Draws the tracker's slices and writes both the texture and the tracker.
+        /// \brief Lists every texture format a bake can write.
         ///
-        /// \param Drawer   The composer the tracker's sources are read through.
-        /// \param Atlas    The placed tracker, whose format and layout are settled here.
-        /// \param Output   The tracker file to write.
-        /// \param Image    The texture file to write, as a path the process can open.
-        /// \param Settings The settings the texture is written with.
-        /// \return How the writing ended.
-        Outcome Publish(
-            Ref<Texture::Composer>     Drawer,
-            Ref<Texture::Tracker>      Atlas,
-            Text                       Output,
-            Text                       Image,
-            ConstRef<Texture::Profile> Settings) const;
+        /// \param Parsed The parsed command line.
+        /// \return How the command ended.
+        Outcome Formats(ConstRef<Environment> Parsed) const;
 
-        /// \brief Adds a file to the sources, or every image directly inside it if it is a folder.
+        /// \brief Adds a file to the sources, or the images of a folder in name order.
         ///
-        /// \param Operand The file or folder, as typed.
-        /// \param Skip    The file never to add, which is the texture about to be written.
-        /// \param Output  Receives the sources, a folder's in name order.
+        /// \param Operand The file or folder.
+        /// \param Skip    The file to leave out.
+        /// \param Output  Receives the sources.
         void Collect(Text Operand, Text Skip, Ref<Sequence<Str>> Output) const;
 
     private:

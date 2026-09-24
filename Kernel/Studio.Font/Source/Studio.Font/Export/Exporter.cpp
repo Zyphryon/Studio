@@ -94,8 +94,9 @@ namespace Studio::Font
 
                 // The loader reads a payload the same size as the raw count as uncompressed, so only a payload
                 // that actually shrank is worth keeping.
-                Blob         Scratch = Blob::Allocate<Byte>(LZ4Bound(Texels.GetSize()));
-                const UInt32 Size    = LZ4Encode(Texels, Scratch.GetData<Byte>(), LZ4Bound(Texels.GetSize()), kCompression);
+                const UInt32 Bound   = LZ4Bound(Texels.GetSize());
+                Blob         Scratch = Blob::Allocate<Byte>(Bound);
+                const UInt32 Size    = LZ4Encode(Texels, Scratch.GetData<Byte>(), Bound, kCompression);
 
                 if (Size > 0 && Size < Texels.GetSize())
                 {

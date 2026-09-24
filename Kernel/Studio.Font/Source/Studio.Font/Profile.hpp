@@ -51,18 +51,16 @@ namespace Studio::Font
         /// The codepoint ranges to bake, which may overlap and need not be in order.
         Sequence<Interval> Charset;
 
-        /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
-        ///
-        /// \note A charset that cannot be read leaves \ref Charset empty, which a bake refuses.
+        /// \brief Reads the settings from a command line; a charset that cannot be read is left empty.
         ///
         /// \param Environment The parsed switches.
-        /// \return The settings, left at their defaults where a switch is missing.
+        /// \return The settings, defaulted where a switch is missing.
         static Profile From(ConstRef<Environment> Environment);
 
         /// \brief Reads a charset description into a list of ranges.
         ///
         /// \param Description The charset description.
-        /// \param Output      Receives one range per entry, left untouched if the description cannot be read.
+        /// \param Output      Receives the ranges.
         /// \return `true` if every entry was understood, otherwise `false`.
         static Bool Parse(Text Description, Ref<Sequence<Interval>> Output);
     };

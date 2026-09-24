@@ -102,10 +102,17 @@ namespace Studio::Font
 
         Native.normalize();
 
-        // Contours are never reoriented one by one: in a glyph built from overlapping strokes, as variable fonts
-        // are, that flips one stroke of a pair and punches a hole where they cross.
         const msdfgen::Shape::Bounds Box = Native.getBounds();
-        const msdfgen::Point2        Outside(Box.l - (Box.r - Box.l) - 1.0, Box.b - (Box.t - Box.b) - 1.0);
+
+        // An outline with no area draws nothing, and stb_truetype may even leave its lone point anywhere.
+        if (Box.r <= Box.l || Box.t <= Box.b)
+        {
+            return;
+        }
+
+        // The shape is only ever reversed whole: reorienting contours one by one flips one stroke of an
+        // overlapping pair, as variable fonts have, and punches a hole where they cross.
+        const msdfgen::Point2 Outside(Box.l - (Box.r - Box.l) - 1.0, Box.b - (Box.t - Box.b) - 1.0);
 
         if (msdfgen::SimpleTrueShapeDistanceFinder::oneShotDistance(Native, Outside) > 0.0)
         {
@@ -136,7 +143,8 @@ namespace Studio::Font
         const Real32 OriginX = (static_cast<Real32>(Ink.l) - Half) - (static_cast<Real32>(Width)  - SpanX) * 0.5f;
         const Real32 OriginY = (static_cast<Real32>(Ink.b) - Half) - (static_cast<Real32>(Height) - SpanY) * 0.5f;
 
-        Output.Bounds = Rect(OriginX, OriginY, OriginX + static_cast<Real32>(Width), OriginY + static_cast<Real32>(Height));
+        Output.Bounds = Rect(
+            OriginX, OriginY, OriginX + static_cast<Real32>(Width), OriginY + static_cast<Real32>(Height));
 
         // One texel more than the box on each axis, so the first and last texel centres land exactly on the box's
         // edges. The atlas coordinates written later are inset by half a texel to match.
@@ -152,9 +160,8 @@ namespace Studio::Font
 
         msdfgen::Bitmap<float, 4> Pixels(static_cast<int>(Output.Width), static_cast<int>(Output.Height));
 
-        // The field is generated with overlap support and no error correction, then a scanline pass fills
-        // the outline with the non-zero rule and fixes the sign of every texel that came out on the wrong side,
-        // and only then are the artifacts corrected.
+        // Generate without error correction, fix each texel's sign with a non-zero scanline fill, and only then
+        // correct the artifacts.
         const msdfgen::MSDFGeneratorConfig Generation(
             true, msdfgen::ErrorCorrectionConfig(msdfgen::ErrorCorrectionConfig::DISABLED));
         msdfgen::generateMTSDF(Pixels, Native, Transformation, Generation);

@@ -12,6 +12,7 @@
 
 #include "Composer.hpp"
 #include "Studio.Texture/Process/Resampler.hpp"
+#include <Zyphryon.Graphic/Metadata.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -19,6 +20,39 @@
 
 namespace Studio::Texture
 {
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Canvas Fit(AnyRef<Canvas> Source, UInt16 Width, UInt16 Height)
+    {
+        if (Source.GetWidth() == Width && Source.GetHeight() == Height)
+        {
+            return Move(Source);
+        }
+        return Canvas::From(Resampler::Resize(Source.To(Canvas::kFormat), Width, Height));
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static void Transfer(Ref<Canvas> Target, ConstRef<Canvas> Source, UInt8 Written, UInt8 Read)
+    {
+        for (UInt32 Y = 0; Y < Target.GetHeight(); ++Y)
+        {
+            for (UInt32 X = 0; X < Target.GetWidth(); ++X)
+            {
+                const Color From = Source.Get(X, Y);
+                const Color Into = Target.Get(X, Y);
+
+                const Array<Real32, 4> Taken(From.GetRed(), From.GetGreen(), From.GetBlue(), From.GetAlpha());
+                Array<Real32, 4>       Kept(Into.GetRed(), Into.GetGreen(), Into.GetBlue(), Into.GetAlpha());
+                Kept[Written] = Taken[Read];
+
+                Target.Set(X, Y, Color(Kept[0], Kept[1], Kept[2], Kept[3]));
+            }
+        }
+    }
+
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -37,20 +71,30 @@ namespace Studio::Texture
     {
         for (Ref<Region> Entry : Atlas.Regions)
         {
-            const ConstPtr<Canvas> Source = Fetch(Entry.Source);
+            const ConstPtr<Surface> Source = Fetch(Entry.Source, false);
 
             if (Source == nullptr)
             {
                 return false;
             }
 
-            if (!Entry.From.IsValid())
+            if (Entry.Layer >= Source->Slices.GetSize())
             {
-                Entry.From = Area(0, 0, Source->GetWidth(), Source->GetHeight());
+                LOG_E("Texture: '{0}' takes slice {1} of '{2}', which holds {3}",
+                    Entry.Name, Entry.Layer, Entry.Source, Source->Slices.GetSize());
+
+                return false;
             }
 
-            if (   Entry.From.X + Entry.From.Width  > Source->GetWidth()
-                || Entry.From.Y + Entry.From.Height > Source->GetHeight())
+            ConstRef<Bitmap> Layer = Source->Slices[Entry.Layer];
+
+            if (!Entry.From.IsValid())
+            {
+                Entry.From = Area(0, 0, Layer.GetWidth(), Layer.GetHeight());
+            }
+
+            if (   Entry.From.X + Entry.From.Width  > Layer.GetWidth()
+                || Entry.From.Y + Entry.From.Height > Layer.GetHeight())
             {
                 LOG_E("Texture: '{0}' takes {1}x{2} at {3},{4}, which leaves its {5}x{6} source",
                     Entry.Name,
@@ -58,8 +102,8 @@ namespace Studio::Texture
                     Entry.From.Height,
                     Entry.From.X,
                     Entry.From.Y,
-                    Source->GetWidth(),
-                    Source->GetHeight());
+                    Layer.GetWidth(),
+                    Layer.GetHeight());
 
                 return false;
             }
@@ -68,6 +112,14 @@ namespace Studio::Texture
             {
                 Entry.Rect.Width  = Entry.From.Width;
                 Entry.Rect.Height = Entry.From.Height;
+            }
+
+            for (ConstRef<Splice> Graft : Entry.Channels)
+            {
+                if (Fetch(Graft.Source, true) == nullptr)
+                {
+                    return false;
+                }
             }
         }
         return true;
@@ -90,34 +142,76 @@ namespace Studio::Texture
             return false;
         }
 
+        // The format is settled before drawing, since the fill is given as that format stores it.
+        if (Atlas.Format == ZyGraphic::TextureFormat::Unspecified)
+        {
+            Atlas.Format = (mProfile.Format != ZyGraphic::TextureFormat::Unspecified) ? mProfile.Format : mFirst;
+        }
+
+        // Only an array can grow; a flat atlas with a region past its one slice is refused below.
+        if (Atlas.Layout == ZyGraphic::TextureLayout::Texture2DArray)
+        {
+            Atlas.Slices = Atlas.GetDepth();
+        }
+
+        const Color Fill = ZyGraphic::GetTextureMetadata(Atlas.Format).IsSRGB
+            ? Color::FromColor8(Atlas.Fill).ToLinear()
+            : Color::FromColor8(Atlas.Fill);
+
         Sequence<Canvas> Pages;
 
         for (UInt16 Slice = 0; Slice < Atlas.Slices; ++Slice)
         {
-            Pages.Append(Canvas(Atlas.Width, Atlas.Height));
+            Ref<Canvas> Page = Pages.Append(Canvas(Atlas.Width, Atlas.Height));
+
+            // A new canvas is already transparent, the default fill.
+            if (Atlas.Fill == IntColor8::Transparent())
+            {
+                continue;
+            }
+
+            for (UInt32 Y = 0; Y < Atlas.Height; ++Y)
+            {
+                for (UInt32 X = 0; X < Atlas.Width; ++X)
+                {
+                    Page.Set(X, Y, Fill);
+                }
+            }
         }
 
         for (ConstRef<Region> Entry : Atlas.Regions)
         {
             ConstRef<Area> Place = Entry.Rect;
 
-            if (Entry.Slice >= Atlas.Slices || Place.X + Place.Width > Atlas.Width || Place.Y + Place.Height > Atlas.Height)
+            if (Entry.Slice >= Atlas.Slices)
+            {
+                LOG_E("Texture: '{0}' sits on slice {1} of a flat texture, which has only one",
+                    Entry.Name, Entry.Slice);
+
+                return false;
+            }
+
+            if (Place.X + Place.Width > Atlas.Width || Place.Y + Place.Height > Atlas.Height)
             {
                 LOG_E("Texture: '{0}' sits outside its {1}x{2} slice", Entry.Name, Atlas.Width, Atlas.Height);
 
                 return false;
             }
 
-            ConstRef<Canvas> Source = * Fetch(Entry.Source);
+            const Canvas Source = Canvas::From(Fetch(Entry.Source, false)->Slices[Entry.Layer]);
 
             Canvas Cut(Entry.From.Width, Entry.From.Height);
             Cut.Blit(Source, Entry.From.X, Entry.From.Y, Entry.From.Width, Entry.From.Height, 0, 0);
 
-            // A region whose place is another size, as in an array where every slice is the largest region's size,
-            // is resized to fit.
-            if (Cut.GetWidth() != Place.Width || Cut.GetHeight() != Place.Height)
+            // A region placed at another size, as in an array, is resized to fit.
+            Cut = Fit(Move(Cut), Place.Width, Place.Height);
+
+            // A channel is taken from the whole of its source, fitted to the region the same way.
+            for (ConstRef<Splice> Graft : Entry.Channels)
             {
-                Cut = Canvas::From(Resampler::Resize(Cut.To(Canvas::kFormat), Place.Width, Place.Height));
+                Canvas Plane = Canvas::From(Fetch(Graft.Source, true)->Slices.GetFront());
+
+                Transfer(Cut, Fit(Move(Plane), Place.Width, Place.Height), Graft.Target, Graft.Origin);
             }
 
             Ref<Canvas> Page = Pages[Entry.Slice];
@@ -142,12 +236,6 @@ namespace Studio::Texture
             }
         }
 
-        // The slices take the tracker's format, else the profile's, else the first source's.
-        if (Atlas.Format == ZyGraphic::TextureFormat::Unspecified)
-        {
-            Atlas.Format = (mProfile.Format != ZyGraphic::TextureFormat::Unspecified) ? mProfile.Format : mFirst;
-        }
-
         Output.Clear();
 
         for (ConstRef<Canvas> Page : Pages)
@@ -166,26 +254,63 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    ConstPtr<Canvas> Composer::Fetch(Text Source)
+    Blob Composer::Bake(Ref<Tracker> Atlas)
     {
-        if (const ConstPtr<Canvas> Found = mSources.Find(Str(Source)))
+        Sequence<Bitmap> Slices;
+
+        if (!Compose(Atlas, Slices))
+        {
+            return Blob();
+        }
+
+        Atlas.Layout = mProfile.GetLayout(Atlas.Layout);
+
+        // The slices are already in the tracker's format, so the texture is written in it rather than inferred again.
+        Profile Written = mProfile;
+        Written.Format = Atlas.Format;
+
+        return mBaker.Encode(Move(Slices), Atlas.Layout, Written);
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    UInt16 Composer::Count(Text Source)
+    {
+        const ConstPtr<Surface> Decoded = Fetch(Source, false);
+
+        return Decoded ? static_cast<UInt16>(Decoded->Slices.GetSize()) : 0;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    ConstPtr<Surface> Composer::Fetch(Text Source, Bool Data)
+    {
+        Ref<Table<Str, Surface>> Cache = Data ? mData : mSources;
+
+        if (const ConstPtr<Surface> Found = Cache.Find(Str(Source)))
         {
             return Found;
         }
 
-        const Surface Decoded = mBaker.Load(Tracker::Resolve(mFolder, Source), mProfile);
+        // A channel holds data such as a height, so it is never read through the sRGB curve.
+        Profile Settings = mProfile;
+        Settings.Linear |= Data;
+
+        Surface Decoded = mBaker.Load(Tracker::Resolve(mFolder, Source), Settings);
 
         if (!Decoded.IsValid())
         {
             return nullptr;
         }
 
-        if (mFirst == ZyGraphic::TextureFormat::Unspecified)
+        if (!Data && mFirst == ZyGraphic::TextureFormat::Unspecified)
         {
             mFirst = Decoded.Slices.GetFront().GetFormat();
         }
 
-        mSources.Assign(Str(Source), Canvas::From(Decoded.Slices.GetFront()));
-        return mSources.Find(Str(Source));
+        Cache.Assign(Str(Source), Move(Decoded));
+        return Cache.Find(Str(Source));
     }
 }

@@ -27,11 +27,9 @@ namespace Studio::Texture
 
         /// \brief Transcodes every level of a bitmap into a target format.
         ///
-        /// \note The source is consumed, so when it is already in the target format it passes through uncopied.
-        ///
         /// \param Source The bitmap to convert.
         /// \param Format The format to produce.
-        /// \return A bitmap in the target format, or an invalid bitmap if the format cannot be written.
+        /// \return The converted bitmap, or an invalid one on failure.
         static Bitmap Transcode(AnyRef<Bitmap> Source, ZyGraphic::TextureFormat Format);
     };
 }

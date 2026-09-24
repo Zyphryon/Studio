@@ -27,11 +27,9 @@ namespace Studio::Texture
 
         /// \brief Filters a bitmap down into a chain of successively halved levels.
         ///
-        /// \note The source is consumed, since the base level carries over into the result.
-        ///
         /// \param Source The single-level bitmap to expand.
-        /// \param Levels The number of levels to produce, including the base level.
-        /// \return A bitmap holding the whole chain, or an invalid bitmap if the source cannot be filtered.
+        /// \param Levels The number of levels, the base included.
+        /// \return The whole chain, or an invalid bitmap on failure.
         static Bitmap Generate(AnyRef<Bitmap> Source, UInt8 Levels);
     };
 }

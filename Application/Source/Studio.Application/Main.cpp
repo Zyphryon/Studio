@@ -10,6 +10,7 @@
 // [  HEADER  ]
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+#include "Studio.Application/Preset.hpp"
 #include "Studio.Application/Command/FontDomain.hpp"
 #include "Studio.Application/Command/SoundDomain.hpp"
 #include "Studio.Application/Command/TextureDomain.hpp"
@@ -44,6 +45,11 @@ namespace Studio::Application
         LOG_I("  version                                  Prints the revision of every file Studio writes");
         LOG_I("  help                                     Prints this text");
         LOG_I("");
+        LOG_I("Every command:");
+        LOG_I("  --preset <name>      Switches a preset stands for; sprite, normal and relief are built in");
+        LOG_I("  --presets <file>     A JSON file of presets of the project's own, searched before the built-in ones");
+        LOG_I("");
+        LOG_I("A switch typed on the command line wins over the same switch in a preset.");
         LOG_I("Operands go before switches, since a switch takes the word after it as its value.");
         LOG_I("Every toggle may be negated with its '--no-' spelling, as in '--no-mipmaps'.");
         LOG_I("Exit codes: 0 when everything was done, 1 when some of it failed, 2 when the command was wrong.");
@@ -136,11 +142,35 @@ namespace Studio::Application
 
     static Outcome Run(UInt Count, ConstPtr<ConstPtr<Char>> Arguments)
     {
-        ZyEngine::Subsystem::Host      Host;
-        const Retainer<ZyJob::Service> Scheduler = Host.Register<ZyJob::Service>();
+        Environment Typed;
+        Typed.Parse(Count, Arguments);
+
+        Sequence<Str> Switches;
+
+        if (!Preset::Expand(Typed, Switches))
+        {
+            return Outcome::Misuse;
+        }
+
+        // The preset's switches go before the typed ones, and the last of a name is the one read, so typing a
+        // switch overrides the preset.
+        Sequence<ConstPtr<Char>> Words;
+        Words.Append(Arguments[0]);
+
+        for (ConstRef<Str> Switch : Switches)
+        {
+            Words.Append(Switch.GetData());
+        }
+        for (UInt Index = 1; Index < Count; ++Index)
+        {
+            Words.Append(Arguments[Index]);
+        }
 
         Environment Parsed;
-        Parsed.Parse(Count, Arguments);
+        Parsed.Parse(Words.GetSize(), Words.GetData());
+
+        ZyEngine::Subsystem::Host      Host;
+        const Retainer<ZyJob::Service> Scheduler = Host.Register<ZyJob::Service>();
 
         const Outcome Result = Dispatch(TextureDomain(* Scheduler), FontDomain(* Scheduler), SoundDomain(), Parsed);
 

@@ -52,10 +52,10 @@ namespace Studio::Font
         ///
         /// \param Metrics The typeface metrics.
         /// \param Glyphs  The glyph table, keyed by codepoint.
-        /// \param Kerning The kerning table, left out of the file if it is empty.
-        /// \param Pages   The interleaved four-channel texels of every atlas page, in page order.
-        /// \param Side    The side every page shares, in texels.
-        /// \return A blob holding the font file bytes, or an empty blob on failure.
+        /// \param Kerning The kerning table, left out if empty.
+        /// \param Pages   The RGBA texels of every page, in order.
+        /// \param Side    The side of every page, in texels.
+        /// \return The font bytes, or an empty blob on failure.
         static Blob Export(
             Ref<ZyRender::Font::Metrics> Metrics,
             Ref<ZyRender::Font::Glyphs>  Glyphs,

@@ -27,12 +27,10 @@ namespace Studio::Texture
 
         /// \brief Filters the base level of a bitmap into a new extent.
         ///
-        /// \note Only the base level is read, so the result holds a single level; mips are built afterwards.
-        ///
         /// \param Source The bitmap to filter.
-        /// \param Width  The width to filter into, in pixels.
-        /// \param Height The height to filter into, in pixels.
-        /// \return A bitmap at the requested extent, or an invalid bitmap if the source cannot be filtered.
+        /// \param Width  The target width, in pixels.
+        /// \param Height The target height, in pixels.
+        /// \return The resized bitmap, or an invalid one on failure.
         static Bitmap Resize(ConstRef<Bitmap> Source, UInt16 Width, UInt16 Height);
     };
 }

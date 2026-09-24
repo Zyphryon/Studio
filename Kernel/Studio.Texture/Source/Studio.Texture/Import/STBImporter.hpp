@@ -20,7 +20,7 @@
 
 namespace Studio::Texture
 {
-    /// \brief Represents an \ref Importer backed by `stb_image`, for the common image formats art is saved in.
+    /// \brief Represents an \ref Importer backed by `stb_image`, for the common image formats.
     class STBImporter final : public Importer
     {
     public:

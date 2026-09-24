@@ -45,9 +45,9 @@ namespace Studio::Font
         /// \brief Generates the field of one outline.
         ///
         /// \param Outline The glyph outline, in pixels.
-        /// \param Range   The width of the band the distance fades across, in texels.
-        /// \param Angle   The angle past which a join counts as a corner, in radians.
-        /// \param Output  Receives the field, left empty if the outline encloses nothing.
+        /// \param Range   The width of the distance band, in texels.
+        /// \param Angle   The corner angle, in radians.
+        /// \param Output  Receives the field, empty if nothing is enclosed.
         static void Generate(ConstRef<Shape> Outline, Real32 Range, Real32 Angle, Ref<Field> Output);
     };
 }

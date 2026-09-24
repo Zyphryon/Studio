@@ -22,7 +22,7 @@ namespace Studio::Application
         /// \brief Gets the folder a path sits in.
         ///
         /// \param Value The path to split.
-        /// \return The path up to its last separator, or empty if it names no folder.
+        /// \return The folder, or empty if there is none.
         ZY_INLINE static Text GetFolder(Text Value)
         {
             const SInt Separator = FindSeparator(Value);
@@ -33,7 +33,7 @@ namespace Studio::Application
         /// \brief Gets the file name of a path without its extension.
         ///
         /// \param Value The path to split.
-        /// \return The name after the last separator, up to its last dot.
+        /// \return The file name, up to its last dot.
         ZY_INLINE static Text GetStem(Text Value)
         {
             const Text Name = Value.Slice(FindSeparator(Value) + 1);
@@ -45,7 +45,7 @@ namespace Studio::Application
         /// \brief Gets the extension of a path.
         ///
         /// \param Value The path to split.
-        /// \return The text after the file name's last dot, without the dot, or empty if it has none.
+        /// \return The extension without its dot, or empty if there is none.
         ZY_INLINE static Text GetExtension(Text Value)
         {
             const Text Name = Value.Slice(FindSeparator(Value) + 1);
@@ -57,9 +57,9 @@ namespace Studio::Application
         /// \brief Derives a path beside a source, with a suffix added to its name and another extension.
         ///
         /// \param Source    The path to derive from.
-        /// \param Suffix    The text appended to the file name, which may be empty.
-        /// \param Extension The extension to end with, without its dot.
-        /// \return The derived path, in the same folder as \p Source.
+        /// \param Suffix    The text appended to the name.
+        /// \param Extension The extension, without its dot.
+        /// \return The derived path.
         ZY_INLINE static Str Derive(Text Source, Text Suffix, Text Extension)
         {
             Str Result(Source.Slice(0, FindSeparator(Source) + 1));
@@ -75,7 +75,7 @@ namespace Studio::Application
         /// \brief Finds the last separator in a path, whichever slash it is.
         ///
         /// \param Value The path to search.
-        /// \return The index of the last separator, or -1 if there is none.
+        /// \return The index of the separator, or -1 if there is none.
         ZY_INLINE static SInt FindSeparator(Text Value)
         {
             return Max(StrFindLast(Value, '/'), StrFindLast(Value, '\\'));

@@ -30,16 +30,14 @@ namespace Studio::Texture
 
         // TODO: Block-compressed
 
-        // Block-compressed, bit-packed, depth, and non sampleable formats each need an encoder this exporter
-        // does not have, and would otherwise silently receive plain interleaved bytes.
+        // Compressed, packed, depth and unsampleable formats each need an encoder this exporter does not have.
         if (Description.IsCompressed() ||  Description.IsPacked || Description.IsDepth
          || Description.IsStencil      || !Description.IsSampler())
         {
             return false;
         }
 
-        // The sampler produces normalized or floating-point values, so a raw integer format would have its
-        // bits reinterpreted rather than scaled.
+        // A raw integer format would have the sampler's values reinterpreted rather than scaled.
         if (!Description.IsFloat && !Description.IsNormalized)
         {
             return false;
@@ -110,7 +108,7 @@ namespace Studio::Texture
         {
             for (UInt32 Index = Start; Index < End; ++Index)
             {
-                Baked[Index] = Transcoder::Transcode(Mipmapper::Generate(Move(Slices[Index]), Levels), Format);
+                Baked[Index] = Prepare(Move(Slices[Index]), Levels, Format);
             }
         });
 
@@ -150,8 +148,7 @@ namespace Studio::Texture
         Output.Write<UInt8>(Baked[0].GetLevels());
         Output.Write<UInt32>(Length);
 
-        // The loader reads a payload the same size as the raw count as uncompressed, so only a payload that
-        // actually shrank is worth keeping.
+        // A payload as long as the raw count reads as uncompressed, so only one that shrank is kept.
         if (Profile.Compress)
         {
             Blob         Scratch = Blob::Allocate<Byte>(LZ4Bound(Length));
@@ -166,5 +163,13 @@ namespace Studio::Texture
 
         Output.WriteBlock<UInt32, Byte>(Bytes);
         return Output.Detach();
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bitmap Exporter::Prepare(AnyRef<Bitmap> Source, UInt8 Levels, ZyGraphic::TextureFormat Format)
+    {
+        return Transcoder::Transcode(Mipmapper::Generate(Move(Source), Levels), Format);
     }
 }

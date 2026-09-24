@@ -128,6 +128,22 @@ namespace Studio::Font
         Vector2 Cursor;
         Vector2 Anchor;
 
+        // A contour is closed back to where it began before it is handed over.
+        const auto Close = [&]()
+        {
+            if (Current.IsEmpty())
+            {
+                return;
+            }
+
+            if (Cursor != Anchor)
+            {
+                Current.Append(Edge(Cursor, Anchor));
+            }
+            Output.Push(Move(Current));
+            Current.Clear();
+        };
+
         for (int Step = 0; Step < Count; ++Step)
         {
             ConstRef<stbtt_vertex> Vertex = Vertices[Step];
@@ -136,16 +152,7 @@ namespace Studio::Font
             switch (Vertex.type)
             {
             case STBTT_vmove:
-                // A move starts the next contour, so the one before it is closed back to where it began.
-                if (!Current.IsEmpty())
-                {
-                    if (Cursor != Anchor)
-                    {
-                        Current.Append(Edge(Cursor, Anchor));
-                    }
-                    Output.Push(Move(Current));
-                    Current.Clear();
-                }
+                Close();
                 Anchor = Target;
                 break;
             case STBTT_vline:
@@ -163,14 +170,7 @@ namespace Studio::Font
             Cursor = Target;
         }
 
-        if (!Current.IsEmpty())
-        {
-            if (Cursor != Anchor)
-            {
-                Current.Append(Edge(Cursor, Anchor));
-            }
-            Output.Push(Move(Current));
-        }
+        Close();
         stbtt_FreeShape(AddressOf(Info), Vertices);
     }
 

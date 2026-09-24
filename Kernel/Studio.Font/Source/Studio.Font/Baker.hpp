@@ -27,13 +27,13 @@ namespace Studio::Font
     {
     public:
 
-        /// \brief The key an importer is registered under: a source extension, lowercased and without its dot.
+        /// \brief The key an importer is registered under: a lowercase extension without its dot.
         using Extension = Str16;
 
         /// \brief Maps every accepted extension to the importer that claims it.
         using Registry  = Table<Extension, Retainer<Importer>>;
 
-        /// \brief Describes one typeface a bake draws from, and the codepoints it is asked for.
+        /// \brief Represents one typeface a bake draws from, and the codepoints it is asked for.
         struct Source final
         {
             /// The encoded source bytes.
@@ -42,35 +42,42 @@ namespace Studio::Font
             /// The source extension, which selects the importer.
             Text               Type;
 
-            /// The codepoints to take from this typeface, or empty for whatever the profile asks.
+            /// The codepoints taken from it, or empty for the profile's.
             Sequence<Interval> Charset;
+        };
+
+        /// \brief Represents a fallback typeface on disk, and the codepoints it answers for.
+        struct Fallback final
+        {
+            /// The typeface path, whose extension selects the importer.
+            Text Path;
+
+            /// The charset taken from it, or empty for the profile's.
+            Text Charset;
         };
 
     public:
 
         /// \brief Constructs a baker with every importer the build enables already registered.
         ///
-        /// \param Scheduler The pool the glyphs are generated on, which must outlive the baker.
+        /// \param Scheduler The pool the glyphs are generated on.
         explicit Baker(Ref<ZyJob::Service> Scheduler);
 
-        /// \brief Registers an importer under each extension it accepts.
-        ///
-        /// \note An extension another importer already claims is taken over, which is how a host replaces a
-        ///       built-in decoder with its own.
+        /// \brief Registers an importer under each extension it accepts, taking over any already claimed.
         ///
         /// \param Codec The importer to register.
         void Register(ConstRetainer<Importer> Codec);
 
         /// \brief Unregisters whichever importer claims an extension.
         ///
-        /// \param Type The source extension, with or without its leading dot.
+        /// \param Type The source extension.
         /// \return `true` if an importer was unregistered, otherwise `false`.
         Bool Unregister(Text Type);
 
         /// \brief Finds the importer that claims a source extension.
         ///
-        /// \param Type The source extension, with or without its leading dot.
-        /// \return The matching importer, or `nullptr` if no importer claims the extension.
+        /// \param Type The source extension.
+        /// \return The importer, or `nullptr` if none claims it.
         ConstPtr<Importer> Find(Text Type) const;
 
         /// \brief Gets every extension this baker accepts, keyed to the importer that claims it.
@@ -81,30 +88,29 @@ namespace Studio::Font
             return mRegistry;
         }
 
-        /// \brief Bakes several typefaces into one font.
+        /// \brief Bakes several typefaces into one font, the first to carry a codepoint giving it.
         ///
-        /// \note The sources are read in order, and the first to carry a codepoint is the one it comes from.
-        ///
-        /// \param Sources The typefaces to draw from, in the order they are asked.
-        /// \param Profile The settings controlling the bake.
-        /// \return A blob holding the native font bytes, or an empty blob on failure.
+        /// \param Sources The typefaces, in the order they are asked.
+        /// \param Profile The settings to bake with.
+        /// \return The font bytes, or an empty blob on failure.
         Blob Bake(ConstSpan<Source> Sources, ConstRef<Profile> Profile) const;
 
         /// \brief Bakes an encoded typeface held in memory.
         ///
-        /// \param Source  The encoded source bytes.
-        /// \param Type    The source extension, which selects the importer.
-        /// \param Profile The settings controlling the bake.
-        /// \return A blob holding the native font bytes, or an empty blob on failure.
+        /// \param Source  The encoded typeface.
+        /// \param Type    The source extension.
+        /// \param Profile The settings to bake with.
+        /// \return The font bytes, or an empty blob on failure.
         Blob Bake(ConstSpan<Byte> Source, Text Type, ConstRef<Profile> Profile) const;
 
-        /// \brief Bakes a typeface on disk and writes the native font to another path.
+        /// \brief Bakes a typeface on disk, and any fallbacks, into a font file.
         ///
-        /// \param Source      The typeface path, whose extension selects the importer.
-        /// \param Destination The native output path; any folder in it that does not exist yet is created.
-        /// \param Profile     The settings controlling the bake.
+        /// \param Source      The typeface path.
+        /// \param Destination The font path to write.
+        /// \param Profile     The settings to bake with.
+        /// \param Fallbacks   The typefaces folded in after the source.
         /// \return `true` if the font was written, otherwise `false`.
-        Bool Bake(Text Source, Text Destination, ConstRef<Profile> Profile) const;
+        Bool Bake(Text Source, Text Destination, ConstRef<Profile> Profile, ConstSpan<Fallback> Fallbacks = { }) const;
 
     private:
 

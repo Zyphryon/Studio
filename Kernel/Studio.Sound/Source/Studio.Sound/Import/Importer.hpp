@@ -35,14 +35,14 @@ namespace Studio::Sound
 
         /// \brief Checks whether a source extension is one this importer reads.
         ///
-        /// \param Type The source extension, without its leading dot, in any letter case.
+        /// \param Type The source extension, without its dot.
         /// \return `true` if the extension is accepted, otherwise `false`.
         static Bool Accepts(Text Type);
 
         /// \brief Decodes a source sound and resamples it to the mixer's rate.
         ///
         /// \param Source The encoded source bytes.
-        /// \param Type   The source extension, which selects the decoder.
+        /// \param Type   The source extension.
         /// \return The decoded sample, or an empty sample on failure.
         static Sample Import(ConstSpan<Byte> Source, Text Type);
     };

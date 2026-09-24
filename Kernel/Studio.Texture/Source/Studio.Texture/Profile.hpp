@@ -39,6 +39,13 @@ namespace Studio::Texture
             {
                 return Width > 0 && Height > 0;
             }
+
+            /// \brief Reads an extent typed as `<width>x<height>`.
+            ///
+            /// \param Environment The parsed switches.
+            /// \param Name        The switch name, without its dashes.
+            /// \return The extent, or an invalid one if the switch is missing or malformed.
+            static Extent From(ConstRef<Environment> Environment, Text Name);
         };
 
         /// The format to write, or `Unspecified` to keep the source's own depth and channel count.
@@ -62,10 +69,10 @@ namespace Studio::Texture
         /// The size of one slice of an array atlas, counted in texels.
         Extent                   Slice;
 
-        /// \brief Gets the layout a texture is written as, given the one it was decoded or packed as.
+        /// \brief Gets the layout to write, a lone 2D texture becoming an array if \ref Layered.
         ///
         /// \param Layout The layout the slices were decoded or packed as.
-        /// \return A one-slice array if \ref Layered is set and \p Layout is a plain 2D texture, otherwise \p Layout.
+        /// \return The layout to write.
         ZY_INLINE ZyGraphic::TextureLayout GetLayout(ZyGraphic::TextureLayout Layout) const
         {
             if (Layered && Layout == ZyGraphic::TextureLayout::Texture2D)

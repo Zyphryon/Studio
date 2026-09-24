@@ -29,35 +29,44 @@ namespace Studio::Texture
 
         /// \brief Constructs a composer that reads sources through a baker.
         ///
-        /// \param Baker   The baker whose importers read the sources, which must outlive the composer.
-        /// \param Folder  The folder the tracker sits in, which every region's source is relative to.
-        /// \param Profile The settings sources are read with and slices are written in.
+        /// \param Baker   The baker that reads the sources.
+        /// \param Folder  The folder the sources are relative to.
+        /// \param Profile The settings to read and write with.
         Composer(ConstRef<Baker> Baker, Text Folder, ConstRef<Profile> Profile);
 
-        /// \brief Reads every region's source and fills in the sizes the region leaves out.
+        /// \brief Reads every region's sources and fills in the sizes it leaves out.
         ///
-        /// \note A region with no `From` takes the whole source, and one with no `Rect` takes the size of its `From`.
-        ///
-        /// \param Atlas The tracker whose regions are measured.
-        /// \return `true` if every source was read and every `From` lies inside its source, otherwise `false`.
+        /// \param Atlas The tracker to measure.
+        /// \return `true` if every region is valid, otherwise `false`.
         Bool Measure(Ref<Tracker> Atlas);
 
         /// \brief Draws every slice of a tracker whose regions are already placed.
         ///
-        /// \note A region whose `Rect` differs in size from its `From` is resized to fit.
-        ///
-        /// \param Atlas  The tracker to draw, whose format is settled here if it names none.
-        /// \param Output Receives one bitmap per slice, in the tracker's format.
+        /// \param Atlas  The tracker to draw.
+        /// \param Output Receives one bitmap per slice.
         /// \return `true` if every slice was drawn, otherwise `false`.
         Bool Compose(Ref<Tracker> Atlas, Ref<Sequence<Bitmap>> Output);
+
+        /// \brief Draws every slice of a placed tracker and encodes them as a texture.
+        ///
+        /// \param Atlas The tracker to draw.
+        /// \return The texture bytes, or an empty blob on failure.
+        Blob Bake(Ref<Tracker> Atlas);
+
+        /// \brief Counts the slices a source holds.
+        ///
+        /// \param Source The source, relative to the composer's folder.
+        /// \return The slice count, or zero if it cannot be read.
+        UInt16 Count(Text Source);
 
     private:
 
         /// \brief Gets a source, reading it the first time it is asked for.
         ///
         /// \param Source The source, relative to the composer's folder.
-        /// \return The source's first slice, or `nullptr` if it cannot be read.
-        ConstPtr<Canvas> Fetch(Text Source);
+        /// \param Data   `true` to read it as linear data.
+        /// \return The decoded source, or `nullptr` on failure.
+        ConstPtr<Surface> Fetch(Text Source, Bool Data);
 
     private:
 
@@ -67,7 +76,8 @@ namespace Studio::Texture
         ConstRef<Baker>          mBaker;
         Str                      mFolder;
         ConstRef<Profile>        mProfile;
-        Table<Str, Canvas>       mSources;
+        Table<Str, Surface>      mSources;
+        Table<Str, Surface>      mData;
         ZyGraphic::TextureFormat mFirst;
     };
 }

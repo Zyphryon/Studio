@@ -44,7 +44,7 @@ namespace Studio::Font
     {
     public:
 
-        /// \brief Describes the pages the glyphs were placed on.
+        /// \brief Represents the pages the glyphs were placed on.
         struct Layout final
         {
             /// The side every page shares, in texels.
@@ -58,9 +58,9 @@ namespace Studio::Font
 
         /// \brief Gives every cell a page and a position on it.
         ///
-        /// \param Cells   The cells to place, which are reordered tallest first.
-        /// \param Padding The gap left between neighbouring cells, in texels.
-        /// \param Limit   The largest side a page may take, in texels.
+        /// \param Cells   The cells to place, reordered tallest first.
+        /// \param Padding The gap between cells, in texels.
+        /// \param Limit   The largest side of a page, in texels.
         /// \return The pages the cells were placed on.
         static Layout Arrange(Ref<Sequence<Cell>> Cells, UInt32 Padding, UInt32 Limit);
 

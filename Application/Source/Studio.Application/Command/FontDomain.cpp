@@ -84,6 +84,7 @@ namespace Studio::Application
         LOG_I("  --padding <texels>   Gap left between neighbouring glyphs               (default: 1)");
         LOG_I("  --limit <texels>     Largest atlas page before another one opens        (default: 8192)");
         LOG_I("  --underline <em>     Total vertical space an underline takes            (default: 1.2)");
+        LOG_I("  --fallback <list>    Typefaces folded in, as 'path[=charset];...'; the first to carry a codepoint keeps it");
         LOG_I("");
         LOG_I("The charset lists presets (ascii, latin1, punctuation), codepoints and 'first-last' ranges,");
         LOG_I("separated by commas; numbers are decimal unless they start with '0x'. The range is also how far");
@@ -136,7 +137,23 @@ namespace Studio::Application
         const Text Source      = Operands[1];
         const Str  Derived     = Path::Derive(Source, Text::Empty(), Font::Exporter::kOutput);
         const Text Destination = (Operands.GetSize() > 2) ? Operands[2] : Text(Derived);
+        const Text Fallbacks   = Parsed.GetText("fallback", Text::Empty());
 
-        return mBaker.Bake(Source, Destination, Settings) ? Outcome::Success : Outcome::Failure;
+        // The fallbacks are separated by semicolons, each a path with an optional charset after an equals sign.
+        Sequence<Font::Baker::Fallback> Faces;
+
+        StrSplit(Fallbacks, ';', [&](Text Token)
+        {
+            if (const Text Entry = StrTrim(Token); !Entry.IsEmpty())
+            {
+                const SInt Equals = StrFindLast(Entry, '=');
+
+                Ref<Font::Baker::Fallback> Face = Faces.Append();
+                Face.Path    = Equals >= 0 ? Entry.Slice(0, Equals) : Entry;
+                Face.Charset = Equals >= 0 ? Entry.Slice(Equals + 1) : Text::Empty();
+            }
+        });
+
+        return mBaker.Bake(Source, Destination, Settings, Faces) ? Outcome::Success : Outcome::Failure;
     }
 }

@@ -49,11 +49,11 @@ namespace Studio::Texture
 
         /// \brief Serializes one or more decoded bitmaps into a native texture blob.
         ///
-        /// \param Scheduler The pool the slices are mipped and transcoded on.
-        /// \param Slices    The decoded bitmaps to write, one per array slice or cube face.
+        /// \param Scheduler The pool the slices are processed on.
+        /// \param Slices    The bitmaps to write, one per slice or face.
         /// \param Layout    The layout the slices compose.
-        /// \param Profile   The settings controlling format, mip generation and compression.
-        /// \return A blob holding the texture file bytes, or an empty blob on failure.
+        /// \param Profile   The settings to write with.
+        /// \return The texture bytes, or an empty blob on failure.
         static Blob Export(
             Ref<ZyJob::Service>      Scheduler,
             AnyRef<Sequence<Bitmap>> Slices,
@@ -64,8 +64,16 @@ namespace Studio::Texture
         ///
         /// \param Scheduler The pool the mip chain is built on.
         /// \param Source    The decoded bitmap to write.
-        /// \param Profile   The settings controlling format, mip generation and compression.
-        /// \return A blob holding the texture file bytes, or an empty blob on failure.
+        /// \param Profile   The settings to write with.
+        /// \return The texture bytes, or an empty blob on failure.
         static Blob Export(Ref<ZyJob::Service> Scheduler, AnyRef<Bitmap> Source, ConstRef<Profile> Profile);
+
+        /// \brief Mips and transcodes one slice the way a bake does, for a live upload.
+        ///
+        /// \param Source The slice, holding its base level alone.
+        /// \param Levels The number of levels, the base included.
+        /// \param Format The format every level is written in.
+        /// \return Every level in \p Format, or an empty bitmap on failure.
+        static Bitmap Prepare(AnyRef<Bitmap> Source, UInt8 Levels, ZyGraphic::TextureFormat Format);
     };
 }

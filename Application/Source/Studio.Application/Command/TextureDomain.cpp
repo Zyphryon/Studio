@@ -74,8 +74,65 @@ namespace Studio::Application
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+    static Bool ReadTracker(ConstRef<Environment> Parsed, Ref<Texture::Tracker> Output)
+    {
+        Output.Headroom = Parsed.GetNumber<UInt16>("headroom", Output.Headroom);
+
+        if (!Parsed.Contains("fill"))
+        {
+            return true;
+        }
+
+        const Text Value  = Parsed.GetText("fill", Text::Empty());
+        const Text Digits = StrStartsWith(Value, "#") ? Value.Slice(1) : Value;
+
+        // FromHexadecimal reads anything as a colour, so the digits are checked first to refuse a typo.
+        Bool Valid = Digits.GetSize() == 6 || Digits.GetSize() == 8;
+
+        for (UInt Index = 0; Valid && Index < Digits.GetSize(); ++Index)
+        {
+            const Char Digit = Digits[Index];
+
+            Valid = (Digit >= '0' && Digit <= '9') || (Digit >= 'a' && Digit <= 'f') || (Digit >= 'A' && Digit <= 'F');
+        }
+
+        if (!Valid)
+        {
+            LOG_E("Texture: '--fill' expects 'RRGGBB' or 'RRGGBBAA' in hexadecimal, which '{0}' is not", Value);
+
+            return false;
+        }
+
+        Output.Fill = IntColor8::FromHexadecimal(Value);
+        return true;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Outcome Publish(Ref<Texture::Composer> Drawer, Ref<Texture::Tracker> Atlas, Text Output, Text Image)
+    {
+        const Blob Bytes = Drawer.Bake(Atlas);
+
+        if (Bytes == nullptr || !Store(Image, Bytes) || !Atlas.Write(Output))
+        {
+            return Outcome::Failure;
+        }
+
+        LOG_I("Texture: {0} regions on {1} slice(s) of {2}x{3} -> '{4}' ({5} bytes) and '{6}'",
+            Atlas.Regions.GetSize(), Atlas.Slices, Atlas.Width, Atlas.Height, Image, Bytes.GetSize(), Output);
+        return Outcome::Success;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
     template<typename Callable>
-    static Outcome Generate(ConstRef<Texture::Baker> Instance, ConstRef<Environment> Parsed, Text Suffix, AnyRef<Callable> Draw)
+    static Outcome Generate(
+        ConstRef<Texture::Baker> Instance,
+        ConstRef<Environment>    Parsed,
+        Text                     Suffix,
+        AnyRef<Callable>         Draw)
     {
         const ConstSpan<Text> Operands = Parsed.GetOperands();
 
@@ -219,6 +276,7 @@ namespace Studio::Application
         LOG_I("  normal <source> [destination]            Draws a normal map, as a '.png' or a '.{0}'", Texture::Exporter::kOutput);
         LOG_I("  relief <source> [destination]            Draws a relief map, as a '.png' or a '.{0}'", Texture::Exporter::kOutput);
         LOG_I("  extract <texture> [destination]          Writes each slice as a '.png'; several are numbered '_0', '_1'...");
+        LOG_I("  formats                                  Lists every format '--format' accepts, one name per line");
         LOG_I("");
         LOG_I("Texture switches (bake, pack, build, and normal or relief into a '.{0}'):", Texture::Exporter::kOutput);
         LOG_I("  --format <name>      Any texture format name, such as R8UIntNorm or RGBA16Float (default: inferred)");
@@ -237,6 +295,9 @@ namespace Studio::Application
         LOG_I("  --height <n>         The tallest a slice may grow, in pixels                (default: 2048)");
         LOG_I("  --padding <n>        Empty pixels between neighbouring regions              (default: 1)");
         LOG_I("  --extrude <n>        Pixels each region's edge is repeated outward by       (default: 0)");
+        LOG_I("  --extent <w>x<h>     Array: every slice's size, instead of the largest region's");
+        LOG_I("  --headroom <n>       Round an array's slice count up to a multiple of n     (default: 1)");
+        LOG_I("  --fill <RRGGBBAA>    The colour of every pixel no region covers, as stored  (default: 00000000)");
         LOG_I("  --pot                Round each side of a slice up to a power of two        (default: on)");
         LOG_I("  --square             Keep each slice square                                 (default: off)");
         LOG_I("  --pages              Spill what does not fit onto further slices            (default: off)");
@@ -278,6 +339,7 @@ namespace Studio::Application
             { "normal",  &TextureDomain::Normal  },
             { "relief",  &TextureDomain::Relief  },
             { "extract", &TextureDomain::Extract },
+            { "formats", &TextureDomain::Formats },
         };
 
         for (ConstRef<Entry> Command : kCommands)
@@ -351,6 +413,11 @@ namespace Studio::Application
             return Outcome::Misuse;
         }
 
+        if (!ReadTracker(Parsed, Atlas))
+        {
+            return Outcome::Misuse;
+        }
+
         Sequence<Str> Sources;
 
         for (UInt Index = 1; Index < Operands.GetSize(); ++Index)
@@ -365,37 +432,54 @@ namespace Studio::Application
             return Outcome::Misuse;
         }
 
+        Texture::Composer Drawer(mBaker, Folder, Settings);
+
         for (ConstRef<Str> Source : Sources)
         {
-            const Text Name = Path::GetStem(Source);
+            Str Relative;
 
-            // A consumer looks a region up by its name, so no two regions may share one.
-            for (ConstRef<Texture::Region> Other : Atlas.Regions)
-            {
-                if (StrEqualCaseInsensitive(Other.Name, Name))
-                {
-                    LOG_E("Texture: '{0}' and '{1}' would both be named '{2}'", Other.Source, Source, Name);
-
-                    return Outcome::Failure;
-                }
-            }
-
-            Ref<Texture::Region> Entry = Atlas.Regions.Append();
-            Entry.Name = Str(Name);
-
-            if (!Texture::Tracker::Relate(Folder, Source, Entry.Source))
+            if (!Texture::Tracker::Relate(Folder, Source, Relative))
             {
                 return Outcome::Misuse;
             }
-        }
 
-        Texture::Composer Drawer(mBaker, Folder, Settings);
+            const UInt16 Layers = Drawer.Count(Relative);
+
+            if (Layers == 0)
+            {
+                return Outcome::Failure;
+            }
+
+            // An array brings every slice along, each a region of its own, numbered so the names sort in slice order.
+            for (UInt16 Layer = 0; Layer < Layers; ++Layer)
+            {
+                const Str Name = (Layers > 1)
+                    ? Str::Print<"{0}_{1:03}">(Path::GetStem(Source), Layer)
+                    : Str(Path::GetStem(Source));
+
+                // A consumer looks a region up by its name, so no two regions may share one.
+                for (ConstRef<Texture::Region> Other : Atlas.Regions)
+                {
+                    if (StrEqualCaseInsensitive(Other.Name, Name))
+                    {
+                        LOG_E("Texture: '{0}' and '{1}' would both be named '{2}'", Other.Source, Source, Name);
+
+                        return Outcome::Failure;
+                    }
+                }
+
+                Ref<Texture::Region> Entry = Atlas.Regions.Append();
+                Entry.Name   = Name;
+                Entry.Source = Relative;
+                Entry.Layer  = Layer;
+            }
+        }
 
         if (!Drawer.Measure(Atlas) || !Texture::Packer::Pack(Atlas, Texture::Packer::Settings::From(Parsed)))
         {
             return Outcome::Failure;
         }
-        return Publish(Drawer, Atlas, Output, Image, Settings);
+        return Publish(Drawer, Atlas, Output, Image);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -429,10 +513,15 @@ namespace Studio::Application
             return Outcome::Failure;
         }
 
-        // A format asked for on the command line wins over the one the tracker was last written in.
+        // A format, fill or headroom typed on the command line wins over the tracker's own.
         if (Settings.Format != ZyGraphic::TextureFormat::Unspecified)
         {
             Atlas.Format = Settings.Format;
+        }
+
+        if (!ReadTracker(Parsed, Atlas))
+        {
+            return Outcome::Misuse;
         }
 
         if (Atlas.Texture.IsEmpty())
@@ -469,7 +558,7 @@ namespace Studio::Application
             }
         }
 
-        // A hand-edited tracker may overlap two regions. It still draws, but the later region hides part of the other.
+        // A hand-edited tracker may overlap two regions; it still draws, with the later region on top.
         for (UInt Index = 0; Index < Atlas.Regions.GetSize(); ++Index)
         {
             for (UInt Other = Index + 1; Other < Atlas.Regions.GetSize(); ++Other)
@@ -485,9 +574,7 @@ namespace Studio::Application
             }
         }
 
-        const Str Image = Texture::Tracker::Resolve(Folder, Atlas.Texture);
-
-        return Publish(Drawer, Atlas, Output, Image, Settings);
+        return Publish(Drawer, Atlas, Output, Texture::Tracker::Resolve(Folder, Atlas.Texture));
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -574,35 +661,15 @@ namespace Studio::Application
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Outcome TextureDomain::Publish(
-        Ref<Texture::Composer>     Drawer,
-        Ref<Texture::Tracker>      Atlas,
-        Text                       Output,
-        Text                       Image,
-        ConstRef<Texture::Profile> Settings) const
+    Outcome TextureDomain::Formats(ConstRef<Environment> Parsed) const
     {
-        Sequence<Texture::Bitmap> Slices;
-
-        if (!Drawer.Compose(Atlas, Slices))
+        for (const ZyGraphic::TextureFormat Format : ZyEnum::GetValues<ZyGraphic::TextureFormat>())
         {
-            return Outcome::Failure;
+            if (Texture::Exporter::IsSupported(Format))
+            {
+                LOG_I("{0}", ZyEnum::GetName(Format));
+            }
         }
-
-        Atlas.Layout = Settings.GetLayout(Atlas.Layout);
-
-        // The slices are already in the tracker's format, so the texture is written in it rather than inferred again.
-        Texture::Profile Written = Settings;
-        Written.Format = Atlas.Format;
-
-        const Blob Bytes = mBaker.Encode(Move(Slices), Atlas.Layout, Written);
-
-        if (Bytes == nullptr || !Store(Image, Bytes) || !Atlas.Write(Output))
-        {
-            return Outcome::Failure;
-        }
-
-        LOG_I("Texture: {0} regions on {1} slice(s) of {2}x{3} -> '{4}' ({5} bytes) and '{6}'",
-            Atlas.Regions.GetSize(), Atlas.Slices, Atlas.Width, Atlas.Height, Image, Bytes.GetSize(), Output);
         return Outcome::Success;
     }
 

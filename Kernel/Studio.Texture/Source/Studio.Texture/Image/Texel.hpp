@@ -120,8 +120,8 @@ namespace Studio::Texture
 
         /// \brief Encodes a linear value through the engine's transfer and rounds it to the nearest byte.
         ///
-        /// \param Value The linear value, clamped into unit range once encoded.
-        /// \return The encoded step, in the range `[0, 255]`.
+        /// \param Value The linear value.
+        /// \return The encoded step, from 0 to 255.
         static UInt32 Sample(Real32 Value)
         {
             const Real32 Encoded = Color(Value, Value, Value, 1.0f).ToSRGB().GetRed();
@@ -130,13 +130,11 @@ namespace Studio::Texture
 
         /// \brief Finds the lowest linear value that encodes to a given step.
         ///
-        /// \note Non-negative floats sort the same way as their bit patterns, so the search bisects the bits
-        ///       rather than the value and lands exactly on the boundary instead of near it.
-        ///
-        /// \param Level The encoded step to find the boundary of, in the range `[1, 255]`.
+        /// \param Level The encoded step, from 1 to 255.
         /// \return The lowest linear value \ref Sample maps to that step.
         static Real32 Threshold(UInt32 Level)
         {
+            // Non-negative floats sort like their bit patterns, so bisecting the bits lands exactly on the boundary.
             UInt32 Low  = 0x00000000;   // 0.0f
             UInt32 High = 0x3F800000;   // 1.0f
 

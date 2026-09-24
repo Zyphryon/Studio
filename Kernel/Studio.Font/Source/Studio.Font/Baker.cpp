@@ -107,7 +107,7 @@ namespace Studio::Font
         Typeface::Metrics         Measured;
         Sequence<Typeface::Glyph> Outlined;
         Typeface::Kerning         Paired;
-        Table<UInt32, UInt32>     Claimed;
+        Table<UInt32, Bool>       Claimed;
 
         for (ConstRef<Source> Each : Sources)
         {
@@ -143,9 +143,9 @@ namespace Studio::Font
 
             for (ConstRef<Typeface::Glyph> Glyph : Face.GetGlyphs())
             {
-                if (!Claimed.Find(Glyph.Codepoint))
+                if (!Claimed.Contains(Glyph.Codepoint))
                 {
-                    Claimed.Assign(Glyph.Codepoint, static_cast<UInt32>(Outlined.GetSize()));
+                    Claimed.Assign(Glyph.Codepoint, true);
                     Outlined.Append(Glyph);
                 }
             }
@@ -275,18 +275,44 @@ namespace Studio::Font
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Bool Baker::Bake(Text Source, Text Destination, ConstRef<Profile> Profile) const
+    Bool Baker::Bake(Text Source, Text Destination, ConstRef<Profile> Profile, ConstSpan<Fallback> Fallbacks) const
     {
-        Blob Input;
+        // Every typeface is read before the bake, since the bake walks them together and reads their bytes as it goes.
+        Sequence<Blob>          Files;
+        Sequence<Baker::Source> Faces;
 
-        if (Filesystem::Read(Source, Input) != Filesystem::Result::Success || Input == nullptr)
+        const auto Gather = [&](Text Path, Text Charset)
         {
-            LOG_E("Font: failed to read '{0}'", Source);
+            Ref<Blob> Bytes = Files.Append();
 
+            if (Filesystem::Read(Path, Bytes) != Filesystem::Result::Success || Bytes == nullptr)
+            {
+                LOG_E("Font: failed to read '{0}'", Path);
+
+                return false;
+            }
+
+            Ref<Baker::Source> Face = Faces.Append();
+            Face.Data = Bytes;
+            Face.Type = StrAfterLast(Path, '.');
+
+            return Charset.IsEmpty() || Font::Profile::Parse(Charset, Face.Charset);
+        };
+
+        if (!Gather(Source, Text::Empty()))
+        {
             return false;
         }
 
-        const Blob Output = Bake(Input, StrAfterLast(Source, '.'), Profile);
+        for (ConstRef<Fallback> Entry : Fallbacks)
+        {
+            if (!Gather(Entry.Path, Entry.Charset))
+            {
+                return false;
+            }
+        }
+
+        const Blob Output = Bake(Faces, Profile);
 
         if (Output == nullptr)
         {

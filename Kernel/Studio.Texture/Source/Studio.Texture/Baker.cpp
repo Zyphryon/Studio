@@ -73,9 +73,7 @@ namespace Studio::Texture
 
     ConstPtr<Importer> Baker::Find(Text Type) const
     {
-        const Extension Key = Normalize(Type);
-
-        if (const ConstPtr<Retainer<Importer>> Found = mRegistry.Find(Key))
+        if (const ConstPtr<Retainer<Importer>> Found = mRegistry.Find(Normalize(Type)))
         {
             return static_cast<Ptr<Importer>>(* Found);
         }
@@ -139,9 +137,7 @@ namespace Studio::Texture
 
         if (Profile.Slice.IsValid())
         {
-            const Slicer::Layout Layout = Slicer::Divide(Atlas, Profile.Slice.Width, Profile.Slice.Height);
-
-            Sequence<Bitmap> Slices = Slicer::Slice(Atlas, Layout);
+            Sequence<Bitmap> Slices = Slicer::Slice(Atlas, Slicer::Divide(Atlas, Profile.Slice.Width, Profile.Slice.Height));
 
             if (Slices.IsEmpty())
             {

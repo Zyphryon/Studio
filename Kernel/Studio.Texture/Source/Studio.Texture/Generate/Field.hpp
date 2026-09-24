@@ -30,7 +30,7 @@ namespace Studio::Texture
         Alpha,      ///< The alpha channel alone.
     };
 
-    /// \brief Represents one height per pixel, which is what the normal and relief generators start from.
+    /// \brief Represents one height per pixel, which the normal and relief generators start from.
     class Field final
     {
     public:
@@ -77,17 +77,17 @@ namespace Studio::Texture
             mValues[Y * mWidth + X] = Value;
         }
 
-        /// \brief Reads one value, with coordinates outside the field clamped to its edge or wrapped around it.
+        /// \brief Reads one value, clamping or wrapping coordinates outside the field.
         ///
-        /// \param X    The column, which may fall outside the field.
-        /// \param Y    The row, which may fall outside the field.
+        /// \param X    The column.
+        /// \param Y    The row.
         /// \param Wrap `true` to wrap around the edges, `false` to clamp to them.
         /// \return The value.
         Real32 Fetch(SInt32 X, SInt32 Y, Bool Wrap) const;
 
         /// \brief Smooths the field with a gaussian of the given spread.
         ///
-        /// \param Sigma The spread, in pixels; zero or less leaves the field as it is.
+        /// \param Sigma The spread, in pixels; zero leaves the field as it is.
         /// \param Wrap  `true` to wrap around the edges, `false` to clamp to them.
         void Blur(Real32 Sigma, Bool Wrap);
 
@@ -98,7 +98,7 @@ namespace Studio::Texture
         /// \param Source The canvas to read.
         /// \param From   The part of each pixel read as its height.
         /// \param Invert `true` to turn the height upside down.
-        /// \return The field, one value per pixel in the range `[0, 1]` for normalized sources.
+        /// \return The field, one value per pixel.
         static Field From(ConstRef<Canvas> Source, Channel From, Bool Invert);
 
     private:

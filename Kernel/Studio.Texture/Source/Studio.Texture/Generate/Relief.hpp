@@ -52,22 +52,22 @@ namespace Studio::Texture
             /// The height read as the top; anything above is clamped to it.
             Real32  High       = 1.0f;
 
-            /// The spread of the heights about their middle; above one hardens the relief, below softens it.
+            /// The spread of the heights about their middle; above one hardens.
             Real32  Contrast   = 1.0f;
 
             /// The amount added to every height, before the contrast is applied.
             Real32  Brightness = 0.0f;
 
-            /// The exponent the heights are raised to; above one sinks the middle tones, below lifts them.
+            /// The exponent the heights are raised to; above one sinks the middle.
             Real32  Gamma      = 1.0f;
 
-            /// The distance from the outline at which the art reaches full height, in pixels; zero for no bevel.
+            /// The distance from the outline to full height, in pixels; zero for none.
             Real32  Bevel      = 0.0f;
 
             /// The shape the bevel rises in.
             Shape   Profile    = Shape::Round;
 
-            /// The share of the image's own height kept on top of the bevel; zero for the bevel alone.
+            /// The share of the image's own height kept on the bevel.
             Real32  Detail     = 1.0f;
 
             /// Whether the edges wrap around, as they do for a texture that tiles.
@@ -76,10 +76,10 @@ namespace Studio::Texture
             /// Whether transparent pixels sink to the bottom.
             Bool    Masked     = true;
 
-            /// \brief Reads the settings from a command line, or from any settings bag with the same accessors.
+            /// \brief Reads the settings from a command line.
             ///
             /// \param Environment The parsed switches.
-            /// \return The settings, left at their defaults where a switch is missing.
+            /// \return The settings, with defaults where a switch is missing.
             static Settings From(ConstRef<Environment> Environment);
         };
 
@@ -88,8 +88,8 @@ namespace Studio::Texture
         /// \brief Draws the relief map of an image.
         ///
         /// \param Source   The image read as a height.
-        /// \param Settings The settings the map is drawn with.
-        /// \return The map, the height repeated in RGB, with the source's alpha kept.
+        /// \param Settings The settings to draw with.
+        /// \return The map, the height in RGB and the alpha kept.
         static Canvas Generate(ConstRef<Canvas> Source, ConstRef<Settings> Settings);
     };
 }

@@ -92,7 +92,8 @@ namespace Studio::Texture
             }
             if (Used.X + Used.Width < Candidate.X + Candidate.Width)
             {
-                Next.Append(Used.X + Used.Width, Candidate.Y, Candidate.X + Candidate.Width - (Used.X + Used.Width), Candidate.Height);
+                const UInt32 Right = Used.X + Used.Width;
+                Next.Append(Right, Candidate.Y, Candidate.X + Candidate.Width - Right, Candidate.Height);
             }
             if (Used.Y > Candidate.Y)
             {
@@ -100,7 +101,8 @@ namespace Studio::Texture
             }
             if (Used.Y + Used.Height < Candidate.Y + Candidate.Height)
             {
-                Next.Append(Candidate.X, Used.Y + Used.Height, Candidate.Width, Candidate.Y + Candidate.Height - (Used.Y + Used.Height));
+                const UInt32 Bottom = Used.Y + Used.Height;
+                Next.Append(Candidate.X, Bottom, Candidate.Width, Candidate.Y + Candidate.Height - Bottom);
             }
         }
 
@@ -226,6 +228,7 @@ namespace Studio::Texture
         Result.Layout     = Environment.GetEnum<Mode>("mode",           Result.Layout);
         Result.Width      = Environment.GetNumber<UInt16>("width",      Result.Width);
         Result.Height     = Environment.GetNumber<UInt16>("height",     Result.Height);
+        Result.Extent     = Profile::Extent::From(Environment, "extent");
         Result.Padding    = Environment.GetNumber<UInt16>("padding",    Result.Padding);
         Result.Extrude    = Environment.GetNumber<UInt16>("extrude",    Result.Extrude);
         Result.PowerOfTwo = Environment.GetBool("pot",                  Result.PowerOfTwo);
@@ -246,16 +249,19 @@ namespace Studio::Texture
             return false;
         }
 
-        // An array gives every region a slice of its own, each the size of the largest region.
+        // An array gives every region a slice of its own, each the size asked for or else the largest region's.
         if (Settings.Layout == Mode::Array)
         {
-            UInt16 Width  = 0;
-            UInt16 Height = 0;
+            UInt16 Width  = Settings.Extent.Width;
+            UInt16 Height = Settings.Extent.Height;
 
-            for (ConstRef<Region> Entry : Atlas.Regions)
+            if (!Settings.Extent.IsValid())
             {
-                Width  = Max(Width,  Entry.Rect.Width);
-                Height = Max(Height, Entry.Rect.Height);
+                for (ConstRef<Region> Entry : Atlas.Regions)
+                {
+                    Width  = Max(Width,  Entry.Rect.Width);
+                    Height = Max(Height, Entry.Rect.Height);
+                }
             }
 
             for (UInt Index = 0; Index < Atlas.Regions.GetSize(); ++Index)

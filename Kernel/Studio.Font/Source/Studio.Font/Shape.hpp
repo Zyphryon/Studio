@@ -71,7 +71,7 @@ namespace Studio::Font
 
         /// \brief Gets the degree of the segment.
         ///
-        /// \return One for a line, two for a quadratic, three for a cubic, or zero if the edge is empty.
+        /// \return The order, from 1 (line) to 3 (cubic), or 0 if empty.
         ZY_INLINE constexpr UInt8 GetOrder() const
         {
             return mOrder;
@@ -79,7 +79,7 @@ namespace Studio::Font
 
         /// \brief Gets one of the segment's control points.
         ///
-        /// \param Index The zero-based index of the control point, up to the order.
+        /// \param Index The index of the point, up to the order.
         /// \return The control point.
         ZY_INLINE constexpr Vector2 GetPoint(UInt32 Index) const
         {
@@ -97,7 +97,7 @@ namespace Studio::Font
         Vector2 mPoints[kMaxPoints];
     };
 
-    /// \brief A closed loop of edges.
+    /// \brief Represents a closed loop of edges.
     using Contour = Sequence<Edge>;
 
     /// \brief Represents a glyph outline as every closed loop the glyph is built from.

@@ -14,7 +14,7 @@
 
 namespace Studio::Application
 {
-    /// \brief Specifies the exit code a command ends with, so a caller can tell a failed bake from a bad call.
+    /// \brief Specifies the exit code a command ends with.
     enum class Outcome : SInt32
     {
         Success = 0,    ///< Everything asked for was done.

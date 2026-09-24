@@ -21,11 +21,11 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Profile::Extent Measure(ConstRef<Environment> Environment, Text Name)
+    Profile::Extent Profile::Extent::From(ConstRef<Environment> Environment, Text Name)
     {
         const Text Value = Environment.GetText(Name, Text::Empty());
 
-        // A missing switch is not an error: it just means nothing is cut.
+        // A missing switch is not an error: it just means the default is kept.
         if (Value.IsEmpty())
         {
             return Profile::Extent();
@@ -46,7 +46,7 @@ namespace Studio::Texture
 
         if (Width == 0 || Height == 0 || Width > 0xFFFF || Height > 0xFFFF)
         {
-            LOG_E("Texture: '--{0}' was given '{1}', which is too small or too large to cut by", Name, Value);
+            LOG_E("Texture: '--{0}' was given '{1}', which is too small or too large", Name, Value);
 
             return Profile::Extent();
         }
@@ -66,8 +66,8 @@ namespace Studio::Texture
         Result.Layered  = Environment.GetBool("layered",    Result.Layered);
 
         // The two divisions differ in unit: a cube is counted in faces, an array in texels.
-        Result.Cube     = Measure(Environment, "cube");
-        Result.Slice    = Measure(Environment, "array");
+        Result.Cube     = Extent::From(Environment, "cube");
+        Result.Slice    = Extent::From(Environment, "array");
 
         return Result;
     }

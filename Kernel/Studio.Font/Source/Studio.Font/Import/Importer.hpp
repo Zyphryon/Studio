@@ -21,7 +21,7 @@
 
 namespace Studio::Font
 {
-    /// \brief Defines a decoder that turns an encoded typeface into the outlines and metrics the generator reads.
+    /// \brief Defines a decoder that turns an encoded typeface into outlines and metrics.
     class Importer : public Retainable<Importer>
     {
     public:
@@ -36,9 +36,9 @@ namespace Studio::Font
 
         /// \brief Decodes an encoded typeface.
         ///
-        /// \param Source  The encoded source bytes.
-        /// \param Profile The settings naming which codepoints to decode, and at what size.
-        /// \return The decoded typeface, or an empty typeface on failure.
+        /// \param Source  The encoded typeface.
+        /// \param Profile The settings naming the codepoints and size.
+        /// \return The typeface, or an empty one on failure.
         virtual Typeface Import(ConstSpan<Byte> Source, ConstRef<Profile> Profile) const = 0;
     };
 }

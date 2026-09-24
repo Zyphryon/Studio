@@ -32,7 +32,7 @@ namespace Studio::Sound
         /// \param Samples   The interleaved frames, as 32-bit floating-point values.
         /// \param Frequency The rate the frames are clocked at, in hertz.
         /// \param Stride    The number of channels in a frame.
-        /// \param Frames    The number of frames \p Samples holds.
+        /// \param Frames    The number of frames.
         ZY_INLINE Sample(AnyRef<Blob> Samples, UInt32 Frequency, UInt16 Stride, UInt64 Frames)
             : mSamples   { Move(Samples) },
               mFrequency { Frequency },

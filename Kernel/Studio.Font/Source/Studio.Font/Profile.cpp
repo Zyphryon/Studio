@@ -23,42 +23,13 @@ namespace Studio::Font
 
     static Bool ReadCodepoint(Text Value, Ref<UInt32> Output)
     {
-        if (Value.IsEmpty())
-        {
-            return false;
-        }
+        const Bool Hex    = Value.GetSize() > 2 && Value[0] == '0' && (Value[1] == 'x' || Value[1] == 'X');
+        UInt       Cursor = Hex ? 2 : 0;
 
-        const Bool Hex   = Value.GetSize() > 2 && Value[0] == '0' && (Value[1] == 'x' || Value[1] == 'X');
-        const UInt Start = Hex ? 2 : 0;
+        Output = Hex ? StrExtractNumber<16, UInt32>(Value, Cursor) : StrExtractNumber<10, UInt32>(Value, Cursor);
 
-        UInt32 Result = 0;
-
-        for (UInt Index = Start; Index < Value.GetSize(); ++Index)
-        {
-            const Char Digit = Value[Index];
-            UInt32     Place;
-
-            if (Digit >= '0' && Digit <= '9')
-            {
-                Place = static_cast<UInt32>(Digit - '0');
-            }
-            else if (Hex && Digit >= 'a' && Digit <= 'f')
-            {
-                Place = static_cast<UInt32>(Digit - 'a') + 10;
-            }
-            else if (Hex && Digit >= 'A' && Digit <= 'F')
-            {
-                Place = static_cast<UInt32>(Digit - 'A') + 10;
-            }
-            else
-            {
-                return false;
-            }
-            Result = Result * (Hex ? 16 : 10) + Place;
-        }
-
-        Output = Result;
-        return true;
+        // Anything left unread, such as a stray letter, makes the whole value unreadable.
+        return !Value.IsEmpty() && Cursor == Value.GetSize();
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -138,27 +109,22 @@ namespace Studio::Font
     Bool Profile::Parse(Text Description, Ref<Sequence<Interval>> Output)
     {
         Sequence<Interval> Parsed;
+        Bool               Valid = true;
 
-        for (UInt Cursor = 0; Cursor <= Description.GetSize(); )
+        StrSplit(Description, ',', [&](Text Token)
         {
-            // Everything up to the next comma is one entry; the last entry runs to the end.
-            UInt Split = Cursor;
-
-            while (Split < Description.GetSize() && Description[Split] != ',')
+            if (const Text Entry = StrTrim(Token); !Entry.IsEmpty() && !ReadEntry(Entry, Parsed))
             {
-                ++Split;
-            }
+                LOG_E("Font: '{0}' is not a codepoint, a range, or a known charset", Entry);
 
-            if (const Text Entry = StrTrim(Description.Slice(Cursor, Split - Cursor)); !Entry.IsEmpty())
-            {
-                if (!ReadEntry(Entry, Parsed))
-                {
-                    LOG_E("Font: '{0}' is not a codepoint, a range, or a known charset", Entry);
-
-                    return false;
-                }
+                Valid = false;
             }
-            Cursor = Split + 1;
+            return Valid;
+        });
+
+        if (!Valid)
+        {
+            return false;
         }
 
         if (Parsed.IsEmpty())

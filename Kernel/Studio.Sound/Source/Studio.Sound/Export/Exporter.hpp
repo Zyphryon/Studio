@@ -40,11 +40,11 @@ namespace Studio::Sound
 
     public:
 
-        /// \brief Serializes decoded samples into a native sound blob.
+        /// \brief Serializes decoded samples, already at the mixer's rate, into a native sound.
         ///
-        /// \param Source  The decoded samples to write, already at the mixer's rate.
-        /// \param Profile The settings controlling encoding and compression.
-        /// \return A blob holding the sound file bytes, or an empty blob on failure.
+        /// \param Source  The samples to write.
+        /// \param Profile The settings to write with.
+        /// \return The sound file bytes, or an empty blob on failure.
         static Blob Export(ConstRef<Sample> Source, ConstRef<Profile> Profile);
 
     private:
@@ -64,7 +64,7 @@ namespace Studio::Sound
         /// \brief Compresses interleaved samples into Opus packets, after a directory that indexes them.
         ///
         /// \param Source  The samples to compress.
-        /// \param Bitrate The rate the encoder aims for across every channel, in bits per second.
+        /// \param Bitrate The rate to aim for, in bits per second.
         /// \return The compressed payload, or an empty blob on failure.
         static Blob EncodeOpus(ConstRef<Sample> Source, SInt32 Bitrate);
     };

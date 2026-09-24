@@ -71,13 +71,11 @@ namespace Studio::Texture
             return Surface();
         }
 
-        // Decode at the source's own precision. Routing a floating-point or 16-bit source through the 8-bit
-        // entry point would tone-map or truncate it silently, so each depth gets its matching loader.
+        // Each depth gets its own loader, since the 8-bit one would tone-map or truncate a wider source.
         const Bool Real = stbi_is_hdr_from_memory(Encoded, Length);
         const Bool Wide = !Real && stbi_is_16_bit_from_memory(Encoded, Length);
 
-        // Floating-point pixels are linear by definition, and the engine has no wide sRGB format, so an sRGB
-        // request only means anything at 8-bit.
+        // The engine stores sRGB only at 8 bits, so a wider source stays linear.
         const Bool sRGB = !Profile.Linear && !Real && !Wide;
 
         if (!Profile.Linear && (Real || Wide))
@@ -86,8 +84,7 @@ namespace Studio::Texture
                 Real ? "floating-point"_Text : "16-bit"_Text);
         }
 
-        // Three-channel pixels have no 8-bit or 16-bit engine format, and sRGB exists only as a four-channel
-        // variant, so both cases expand to RGBA. One and two channel sources keep their width.
+        // The engine has no three-channel format and sRGB only as RGBA, so both cases expand to four channels.
         const Bool   Expand  = Channels == 3 || (sRGB && Channels < 4);
         const SInt32 Request = Expand ? STBI_rgb_alpha : Channels;
 
