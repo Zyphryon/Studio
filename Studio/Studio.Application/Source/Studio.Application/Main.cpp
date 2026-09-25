@@ -10,10 +10,10 @@
 // [  HEADER  ]
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#include "Studio.Application/Preset.hpp"
-#include "Studio.Application/Command/FontDomain.hpp"
-#include "Studio.Application/Command/SoundDomain.hpp"
-#include "Studio.Application/Command/TextureDomain.hpp"
+#include "Preset.hpp"
+#include "Command/FontDomain.hpp"
+#include "Command/SoundDomain.hpp"
+#include "Command/TextureDomain.hpp"
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
