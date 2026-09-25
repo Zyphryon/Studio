@@ -296,6 +296,7 @@ namespace Studio::Application
         LOG_I("  --padding <n>        Empty pixels between neighbouring regions              (default: 1)");
         LOG_I("  --extrude <n>        Pixels each region's edge is repeated outward by       (default: 0)");
         LOG_I("  --extent <w>x<h>     Array: every slice's size, instead of the largest region's");
+        LOG_I("  --fit <f>            Array: Stretch to the slice, or Center or Contain it   (default: Stretch)");
         LOG_I("  --headroom <n>       Round an array's slice count up to a multiple of n     (default: 1)");
         LOG_I("  --fill <RRGGBBAA>    The colour of every pixel no region covers, as stored  (default: 00000000)");
         LOG_I("  --pot                Round each side of a slice up to a power of two        (default: on)");

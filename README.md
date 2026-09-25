@@ -12,8 +12,8 @@ can bake, pack and preview without shelling out.
 
 - **Textures** — PNG, JPEG, TGA, BMP and HDR (or a baked `.tex`) into any engine texture format, with an optional
   mip chain, LZ4 compression, cube maps and arrays cut from a grid.
-- **Atlases and arrays** — `pack` places images with MaxRects into an atlas or one slice each into an array, and
-  writes a tracker beside the texture. Edit the tracker by hand, and `build` draws it again. Slots keep their slice,
+- **Atlases and arrays** — `pack` places images with MaxRects into an atlas or one slice each into an array
+  (stretched to the slice, centred, or shrunk to fit with `--fit`), and writes a tracker beside the texture. Edit the tracker by hand, and `build` draws it again. Slots keep their slice,
   arrays grow with headroom, and channels can be packed from other images (a height into alpha, say).
 - **Generated maps** — tangent-space normal maps (Sobel, Scharr, Prewitt or central differences, over several
   octaves) and greyscale relief maps (levels, contrast, gamma and a shaped bevel from the outline), both from one
@@ -148,7 +148,6 @@ Each domain depends on the engine alone, never on another domain.
 Known gaps, so you don't have to discover them:
 
 - **No GUI yet.** With no command, the executable prints its usage.
-- **`Array` mode stretches** every region to its slice (the largest region, or `--extent`).
 - **`pack` relates source paths lexically**, so mixing a relative source with an absolute tracker path is refused.
 
 ---

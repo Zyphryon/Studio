@@ -30,7 +30,15 @@ namespace Studio::Texture
         enum class Mode : UInt8
         {
             Atlas,      ///< Packed together, spilling onto further slices only when allowed.
-            Array,      ///< One region to a slice, each filling it.
+            Array,      ///< One region to a slice, sized to it as \ref Fitting says.
+        };
+
+        /// \brief Specifies how a region is sized to its array slice.
+        enum class Fitting : UInt8
+        {
+            Stretch,    ///< Resized to fill the slice, whatever its shape.
+            Center,     ///< Kept at its own size, centred; one larger than the slice does not fit.
+            Contain,    ///< Kept at its own size, centred, and shrunk with its shape kept when larger than the slice.
         };
 
         /// \brief Represents the settings a layout is worked out with.
@@ -47,6 +55,9 @@ namespace Studio::Texture
 
             /// The size of every array slice, or invalid for the largest region's.
             Profile::Extent Extent;
+
+            /// The way each region of an array is sized to its slice.
+            Fitting         Fit        = Fitting::Stretch;
 
             /// The empty pixels kept between neighbouring regions.
             UInt16          Padding    = 1;

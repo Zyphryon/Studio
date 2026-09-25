@@ -229,6 +229,7 @@ namespace Studio::Texture
         Result.Width      = Environment.GetNumber<UInt16>("width",      Result.Width);
         Result.Height     = Environment.GetNumber<UInt16>("height",     Result.Height);
         Result.Extent     = Profile::Extent::From(Environment, "extent");
+        Result.Fit        = Environment.GetEnum<Fitting>("fit",         Result.Fit);
         Result.Padding    = Environment.GetNumber<UInt16>("padding",    Result.Padding);
         Result.Extrude    = Environment.GetNumber<UInt16>("extrude",    Result.Extrude);
         Result.PowerOfTwo = Environment.GetBool("pot",                  Result.PowerOfTwo);
@@ -267,8 +268,43 @@ namespace Studio::Texture
             for (UInt Index = 0; Index < Atlas.Regions.GetSize(); ++Index)
             {
                 Ref<Region> Entry = Atlas.Regions[Index];
+
+                // The region arrives at its measured size, and leaves at the size it takes in its slice.
+                UInt32 Wide = Entry.Rect.Width;
+                UInt32 High = Entry.Rect.Height;
+
+                switch (Settings.Fit)
+                {
+                case Fitting::Center:
+                    if (Wide > Width || High > Height)
+                    {
+                        LOG_E("Texture: '{0}' is {1}x{2}, larger than its {3}x{4} slice; '--fit Contain' shrinks it",
+                            Entry.Name, Wide, High, Width, Height);
+
+                        return false;
+                    }
+                    break;
+                case Fitting::Contain:
+                    // The side that overflows most sets the one scale both take, so the shape is kept.
+                    if (Wide > Width || High > Height)
+                    {
+                        const Real32 Scale = Min(static_cast<Real32>(Width) / Wide, static_cast<Real32>(Height) / High);
+
+                        Wide = Clamp<UInt32>(static_cast<UInt32>(Wide * Scale + 0.5f), 1, Width);
+                        High = Clamp<UInt32>(static_cast<UInt32>(High * Scale + 0.5f), 1, Height);
+                    }
+                    break;
+                default:
+                    Wide = Width;
+                    High = Height;
+                    break;
+                }
+
                 Entry.Slice = static_cast<UInt16>(Index);
-                Entry.Rect  = Area(0, 0, Width, Height);
+                Entry.Rect  = Area(static_cast<UInt16>((Width - Wide) / 2), 
+                                   static_cast<UInt16>((Height - High) / 2),
+                                   static_cast<UInt16>(Wide), 
+                                   static_cast<UInt16>(High));
             }
 
             Atlas.Layout  = ZyGraphic::TextureLayout::Texture2DArray;
@@ -276,7 +312,9 @@ namespace Studio::Texture
             Atlas.Height  = Height;
             Atlas.Slices  = static_cast<UInt16>(Atlas.Regions.GetSize());
             Atlas.Padding = 0;
-            Atlas.Extrude = 0;
+
+            // A region smaller than its slice has room around it for its edge to be repeated into.
+            Atlas.Extrude = Settings.Fit == Fitting::Stretch ? 0 : Settings.Extrude;
             return true;
         }
 
