@@ -31,55 +31,6 @@ namespace Studio::Sound
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static UInt8 Compress(Ref<SInt32> Predictor, Ref<SInt32> Step, SInt16 Value)
-    {
-        using namespace ZyAudio::Codec;
-
-        SInt32 Delta  = Value - Predictor;
-        UInt8  Nibble = 0;
-
-        if (Delta < 0)
-        {
-            Nibble = 0x8;
-            Delta  = -Delta;
-        }
-
-        // Each of the three magnitude bits halves the step it compares against, as the decoder expands them.
-        SInt32 Size  = Adaptive::kStepTable[Step];
-        SInt32 Total = Size >> 3;
-
-        if (Delta >= Size)
-        {
-            Nibble |= 0x4;
-            Delta  -= Size;
-            Total  += Size;
-        }
-
-        Size >>= 1;
-
-        if (Delta >= Size)
-        {
-            Nibble |= 0x2;
-            Delta  -= Size;
-            Total  += Size;
-        }
-
-        Size >>= 1;
-
-        if (Delta >= Size)
-        {
-            Nibble |= 0x1;
-            Total  += Size;
-        }
-
-        Predictor = Clamp<SInt32>(Predictor + ((Nibble & 0x8) ? -Total : Total), -32768, 32767);
-        Step      = Clamp<SInt32>(Step + Adaptive::kStepIndex[Nibble], 0, Adaptive::kStepLimit);
-        return Nibble;
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
     Blob Exporter::Export(ConstRef<Sample> Source, ConstRef<Profile> Profile)
     {
         if (Source.IsEmpty())
@@ -168,9 +119,11 @@ namespace Studio::Sound
 
     Blob Exporter::EncodeAdaptive(ConstRef<Sample> Source)
     {
+        using ZyAudio::Codec::Adaptive;
+
         // The block size is read from the decoder, so the two can never disagree.
-        constexpr UInt32 kBlockFrames = ZyAudio::Codec::Adaptive::kBlockFrames;
-        constexpr UInt32 kBlockStride = ZyAudio::Codec::Adaptive::kBlockStride;
+        constexpr UInt32 kBlockFrames = Adaptive::kBlockFrames;
+        constexpr UInt32 kBlockStride = Adaptive::kBlockStride;
 
         const ConstSpan<Real32> Samples = Source.GetSamples();
         const UInt16            Stride  = Source.GetStride();
@@ -184,7 +137,7 @@ namespace Studio::Sound
 
         // The step index carries over from one block to the next, so a block boundary does not reset the quantizer
         // to its coarsest step. Each block's header records the step it starts at, so the decoder can pick it up.
-        Array<SInt32, ZyAudio::kMixerStride> Steps { };
+        Array<Adaptive::Channel, ZyAudio::kMixerStride> States { };
 
         for (UInt64 Block = 0; Block < Blocks; ++Block)
         {
@@ -192,12 +145,14 @@ namespace Studio::Sound
 
             for (UInt16 Channel = 0; Channel < Stride; ++Channel)
             {
-                const Ptr<Byte> Cursor    = Output + (Block * Stride + Channel) * kBlockStride;
-                SInt32          Predictor = Quantize(Samples[Origin * Stride + Channel]);
+                const Ptr<Byte>        Cursor = Output + (Block * Stride + Channel) * kBlockStride;
+                Ref<Adaptive::Channel> State  = States[Channel];
 
-                Cursor[0] = static_cast<Byte>(Predictor & 0xFF);
-                Cursor[1] = static_cast<Byte>((Predictor >> 8) & 0xFF);
-                Cursor[2] = static_cast<Byte>(Steps[Channel]);
+                State.Predictor = Quantize(Samples[Origin * Stride + Channel]);
+
+                Cursor[0] = static_cast<Byte>(State.Predictor & 0xFF);
+                Cursor[1] = static_cast<Byte>((State.Predictor >> 8) & 0xFF);
+                Cursor[2] = static_cast<Byte>(State.Step);
                 Cursor[3] = 0;
 
                 const UInt64 Length = Min<UInt64>(kBlockFrames, Frames - Origin);
@@ -205,7 +160,7 @@ namespace Studio::Sound
                 for (UInt64 Frame = 1; Frame < Length; ++Frame)
                 {
                     const SInt16 Value  = Quantize(Samples[(Origin + Frame) * Stride + Channel]);
-                    const UInt8  Nibble = Compress(Predictor, Steps[Channel], Value);
+                    const UInt8  Nibble = Adaptive::Compress(State, Value);
                     const UInt64 Slot   = 4 + ((Frame - 1) >> 1);
 
                     // Two samples share a byte, the earlier one in the low nibble.
