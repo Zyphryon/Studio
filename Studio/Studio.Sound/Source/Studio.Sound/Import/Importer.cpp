@@ -40,8 +40,8 @@ namespace Studio::Sound
         const ConstSpan Source(Samples.GetData<Real32>(), Frames * Stride);
 
         UInt64 Produced = 0;
-        Blob   Data
-            = ZyAudio::Resampler::Convert(Source, Stride, Frames, Frequency, ZyAudio::kMixerFrequency, Produced);
+
+        Blob Data = ZyAudio::Resampler::Convert(Source, Stride, Frames, Frequency, ZyAudio::kMixerFrequency, Produced);
         return Sample(Move(Data), ZyAudio::kMixerFrequency, Stride, Produced);
     }
 

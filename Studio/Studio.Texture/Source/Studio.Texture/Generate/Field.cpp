@@ -33,20 +33,7 @@ namespace Studio::Texture
 
     Real32 Field::Fetch(SInt32 X, SInt32 Y, Bool Wrap) const
     {
-        const SInt32 Width  = mWidth;
-        const SInt32 Height = mHeight;
-
-        if (Wrap)
-        {
-            X = ((X % Width)  + Width)  % Width;
-            Y = ((Y % Height) + Height) % Height;
-        }
-        else
-        {
-            X = Clamp(X, 0, Width  - 1);
-            Y = Clamp(Y, 0, Height - 1);
-        }
-        return Get(static_cast<UInt32>(X), static_cast<UInt32>(Y));
+        return Get(Canvas::Reach(X, mWidth, Wrap), Canvas::Reach(Y, mHeight, Wrap));
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

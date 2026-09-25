@@ -114,6 +114,21 @@ namespace Studio::Texture
         /// \return The canvas, or an empty one if the bitmap cannot be read.
         static Canvas From(ConstRef<Bitmap> Source);
 
+        /// \brief Brings a coordinate that may lie past the edge of an image back onto it.
+        ///
+        /// \param Coordinate The column or row, which may be negative or past the extent.
+        /// \param Extent     The width or height of the image.
+        /// \param Wrap       Whether the image tiles, so a coordinate past one edge comes back in at the other.
+        /// \return The coordinate on the image: wrapped around if \p Wrap, otherwise held to the nearest edge.
+        ZY_INLINE static UInt32 Reach(SInt32 Coordinate, SInt32 Extent, Bool Wrap)
+        {
+            if (Wrap)
+            {
+                return static_cast<UInt32>((Coordinate % Extent + Extent) % Extent);
+            }
+            return static_cast<UInt32>(Clamp(Coordinate, 0, Extent - 1));
+        }
+
     private:
 
         // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

@@ -43,19 +43,6 @@ namespace Studio::Application
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Bool Overlaps(ConstRef<Texture::Region> First, ConstRef<Texture::Region> Second)
-    {
-        ConstRef<Texture::Area> A = First.Rect;
-        ConstRef<Texture::Area> B = Second.Rect;
-
-        return First.Slice == Second.Slice
-            && A.X < B.X + B.Width  && B.X < A.X + A.Width
-            && A.Y < B.Y + B.Height && B.Y < A.Y + A.Height;
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
     static Bool ReadProfile(ConstRef<Environment> Parsed, Ref<Texture::Profile> Output)
     {
         Output = Texture::Profile::From(Parsed);
@@ -567,7 +554,7 @@ namespace Studio::Application
                 ConstRef<Texture::Region> First  = Atlas.Regions[Index];
                 ConstRef<Texture::Region> Second = Atlas.Regions[Other];
 
-                if (Overlaps(First, Second))
+                if (First.Slice == Second.Slice && First.Rect.Overlaps(Second.Rect))
                 {
                     LOG_W("Texture: '{0}' and '{1}' overlap on slice {2}; the later one is drawn on top",
                         First.Name, Second.Name, First.Slice);

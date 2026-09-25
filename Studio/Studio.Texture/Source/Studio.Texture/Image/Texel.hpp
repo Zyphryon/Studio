@@ -61,6 +61,32 @@ namespace Studio::Texture
         return (Bits == 16) ? Component::UInt16 : Component::UInt8;
     }
 
+    /// \brief Calls a function templated on a channel's storage type, picked from a storage known only at runtime.
+    ///
+    /// \param Storage The storage of each channel.
+    /// \param Select  The function, called as `Select.template operator()<Type>(Index)`.
+    /// \param Index   The index handed to \p Select.
+    /// \return What \p Select returns.
+    template<typename Selector>
+    ZY_INLINE auto Dispatch(Component Storage, ConstRef<Selector> Select, UInt32 Index)
+    {
+        switch (Storage)
+        {
+        case Component::SInt8:
+            return Select.template operator()<SInt8>(Index);
+        case Component::UInt16:
+            return Select.template operator()<UInt16>(Index);
+        case Component::SInt16:
+            return Select.template operator()<SInt16>(Index);
+        case Component::Half:
+            return Select.template operator()<Half>(Index);
+        case Component::Real32:
+            return Select.template operator()<Real32>(Index);
+        default:
+            return Select.template operator()<UInt8>(Index);
+        }
+    }
+
     /// \brief Gets the colour-space conversion between two ends of a transcode.
     ///
     /// \param Source `true` if the source is sRGB-encoded.
@@ -98,7 +124,7 @@ namespace Studio::Texture
         {
             for (UInt32 Step = 0; Step < kSteps; ++Step)
             {
-                const Real32 Value = static_cast<Real32>(Step) / 255.0f;
+                const Real32 Value = DecodeNormalized(static_cast<UInt8>(Step));
 
                 Linear[Step] = Color(Value, Value, Value, 1.0f).ToLinear().GetRed();
             }
@@ -124,8 +150,7 @@ namespace Studio::Texture
         /// \return The encoded step, from 0 to 255.
         static UInt32 Sample(Real32 Value)
         {
-            const Real32 Encoded = Color(Value, Value, Value, 1.0f).ToSRGB().GetRed();
-            return static_cast<UInt32>(Clamp(Encoded, 0.0f, 1.0f) * 255.0f + 0.5f);
+            return EncodeNormalized<UInt8>(Color(Value, Value, Value, 1.0f).ToSRGB().GetRed());
         }
 
         /// \brief Finds the lowest linear value that encodes to a given step.
@@ -142,10 +167,7 @@ namespace Studio::Texture
             {
                 const UInt32 Middle = Low + (High - Low) / 2;
 
-                Real32 Value;
-                Blit(AddressOf(Value), sizeof(Value), AddressOf(Middle));
-
-                if (Sample(Value) >= Level)
+                if (Sample(CastBit<Real32>(Middle)) >= Level)
                 {
                     High = Middle;
                 }
@@ -155,10 +177,7 @@ namespace Studio::Texture
                 }
             }
 
-            Real32 Result;
-            Blit(AddressOf(Result), sizeof(Result), AddressOf(Low));
-
-            return Result;
+            return CastBit<Real32>(Low);
         }
     };
 
@@ -209,27 +228,12 @@ namespace Studio::Texture
 
             return Result;
         }
-        else if constexpr (IsAnyOf<Type, UInt16>)
-        {
-            UInt16 Bits;
-            Blit(AddressOf(Bits), sizeof(Bits), Source);
-
-            return static_cast<Real32>(Bits) / 65535.0f;
-        }
-        else if constexpr (IsAnyOf<Type, SInt16>)
-        {
-            SInt16 Bits;
-            Blit(AddressOf(Bits), sizeof(Bits), Source);
-
-            return Max(static_cast<Real32>(Bits) / 32767.0f, -1.0f);
-        }
-        else if constexpr (IsAnyOf<Type, SInt8>)
-        {
-            return Max(static_cast<Real32>(* Source) / 127.0f, -1.0f);
-        }
         else
         {
-            return static_cast<Real32>(* Source) / 255.0f;
+            Type Bits;
+            Blit(AddressOf(Bits), sizeof(Bits), Source);
+
+            return DecodeNormalized(Bits);
         }
     }
 
@@ -251,28 +255,11 @@ namespace Studio::Texture
         {
             Blit(Target, sizeof(Value), AddressOf(Value));
         }
-        else if constexpr (IsAnyOf<Type, UInt16>)
-        {
-            const UInt16 Bits = static_cast<UInt16>(Clamp(Value, 0.0f, 1.0f) * 65535.0f + 0.5f);
-
-            Blit(Target, sizeof(Bits), AddressOf(Bits));
-        }
-        else if constexpr (IsAnyOf<Type, SInt16>)
-        {
-            const Real32 Clamped = Clamp(Value, -1.0f, 1.0f);
-            const SInt16 Bits    = static_cast<SInt16>(Clamped * 32767.0f + (Clamped >= 0.0f ? 0.5f : -0.5f));
-
-            Blit(Target, sizeof(Bits), AddressOf(Bits));
-        }
-        else if constexpr (IsAnyOf<Type, SInt8>)
-        {
-            const Real32 Clamped = Clamp(Value, -1.0f, 1.0f);
-
-            * Target = static_cast<Byte>(static_cast<SInt8>(Clamped * 127.0f + (Clamped >= 0.0f ? 0.5f : -0.5f)));
-        }
         else
         {
-            * Target = static_cast<UInt8>(Clamp(Value, 0.0f, 1.0f) * 255.0f + 0.5f);
+            const Type Bits = EncodeNormalized<Type>(Value);
+
+            Blit(Target, sizeof(Bits), AddressOf(Bits));
         }
     }
 

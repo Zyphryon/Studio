@@ -69,21 +69,7 @@ namespace Studio::Texture
             return kTable[Index];
         };
 
-        switch (GetComponent(Format))
-        {
-        case Component::SInt8:
-            return Select.operator()<SInt8>(Slot);
-        case Component::UInt16:
-            return Select.operator()<UInt16>(Slot);
-        case Component::SInt16:
-            return Select.operator()<SInt16>(Slot);
-        case Component::Half:
-            return Select.operator()<Half>(Slot);
-        case Component::Real32:
-            return Select.operator()<Real32>(Slot);
-        default:
-            return Select.operator()<UInt8>(Slot);
-        }
+        return Dispatch(GetComponent(Format), Select, Slot);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

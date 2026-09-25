@@ -94,7 +94,7 @@ namespace Studio::Texture
                 }
                 Parts.Append(Part);
             }
-            else if (!Part.IsEmpty() && !(Part == "."))
+            else if (!Part.IsEmpty() && Part != ".")
             {
                 Parts.Append(Part);
             }

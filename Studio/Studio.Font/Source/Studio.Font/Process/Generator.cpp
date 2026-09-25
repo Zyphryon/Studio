@@ -77,14 +77,6 @@ namespace Studio::Font
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Byte Quantize(float Value)
-    {
-        return static_cast<Byte>(Clamp(Value, 0.0f, 1.0f) * 255.0f + 0.5f);
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
     void Generator::Generate(ConstRef<Shape> Outline, Real32 Range, Real32 Angle, Ref<Field> Output)
     {
         Output.Width  = 0;
@@ -182,10 +174,10 @@ namespace Studio::Font
                 const ConstPtr<float> Texel  = Pixels(static_cast<int>(X), static_cast<int>(Y));
                 const UInt            Target = (static_cast<UInt>(Y) * Output.Width + X) * 4;
 
-                Output.Texels[Target + 0] = Quantize(Texel[0]);
-                Output.Texels[Target + 1] = Quantize(Texel[1]);
-                Output.Texels[Target + 2] = Quantize(Texel[2]);
-                Output.Texels[Target + 3] = Quantize(Texel[3]);
+                Output.Texels[Target + 0] = EncodeNormalized<Byte>(Texel[0]);
+                Output.Texels[Target + 1] = EncodeNormalized<Byte>(Texel[1]);
+                Output.Texels[Target + 2] = EncodeNormalized<Byte>(Texel[2]);
+                Output.Texels[Target + 3] = EncodeNormalized<Byte>(Texel[3]);
             }
         }
     }

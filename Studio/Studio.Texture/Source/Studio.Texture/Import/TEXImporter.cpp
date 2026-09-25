@@ -85,22 +85,17 @@ namespace Studio::Texture
             return Surface();
         }
 
-        // A payload shorter than `Size` is one LZ4 block over every slice, so it is decoded whole.
-        Blob Scratch;
+        // A payload shorter than `Size` is one LZ4 block over every slice; one as long was stored as it is.
+        const Blob Expanded = LZ4Expand(Payload, Size);
 
-        if (Size != Payload.GetSize())
+        if (!Expanded)
         {
-            Scratch = Blob::Allocate<Byte>(Size);
+            LOG_E("Texture: ZTEX payload failed to decompress ({0} != {1})", Payload.GetSize(), Size);
 
-            if (LZ4Decode(Payload, Scratch.GetData<Byte>(), Size) != Size)
-            {
-                LOG_E("Texture: ZTEX payload failed to decompress ({0} != {1})", Payload.GetSize(), Size);
-
-                return Surface();
-            }
+            return Surface();
         }
 
-        const ConstPtr<Byte> Pixels = (Scratch == nullptr ? Payload.GetData() : Scratch.GetData<Byte>());
+        const ConstPtr<Byte> Pixels = Expanded.GetData<Byte>();
 
         // Later stages take a single level, so each slice keeps its base level and the chain is built again.
         const UInt32 Length = ZyGraphic::GetLevelSize(Format, Width, Height, 0);

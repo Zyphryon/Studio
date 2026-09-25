@@ -44,8 +44,8 @@ namespace Studio::Texture
                 const Color From = Source.Get(X, Y);
                 const Color Into = Target.Get(X, Y);
 
-                const Array<Real32, 4> Taken(From.GetRed(), From.GetGreen(), From.GetBlue(), From.GetAlpha());
-                Array<Real32, 4>       Kept(Into.GetRed(), Into.GetGreen(), Into.GetBlue(), Into.GetAlpha());
+                const Array Taken(From.GetRed(), From.GetGreen(), From.GetBlue(), From.GetAlpha());
+                Array       Kept(Into.GetRed(), Into.GetGreen(), Into.GetBlue(), Into.GetAlpha());
                 Kept[Written] = Taken[Read];
 
                 Target.Set(X, Y, Color(Kept[0], Kept[1], Kept[2], Kept[3]));
@@ -289,7 +289,7 @@ namespace Studio::Texture
     {
         Ref<Table<Str, Surface>> Cache = Data ? mData : mSources;
 
-        if (const ConstPtr<Surface> Found = Cache.Find(Str(Source)))
+        if (const ConstPtr<Surface> Found = Cache.Find(Source))
         {
             return Found;
         }
@@ -311,6 +311,6 @@ namespace Studio::Texture
         }
 
         Cache.Assign(Str(Source), Move(Decoded));
-        return Cache.Find(Str(Source));
+        return Cache.Find(Source);
     }
 }

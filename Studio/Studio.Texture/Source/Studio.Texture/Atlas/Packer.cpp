@@ -21,30 +21,6 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static UInt16 RoundUp(UInt32 Value, UInt16 Limit)
-    {
-        UInt32 Result = 1;
-
-        while (Result < Value)
-        {
-            Result <<= 1;
-        }
-        return static_cast<UInt16>(Min<UInt32>(Result, Limit));
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-    static Bool Contains(ConstRef<Area> Outer, ConstRef<Area> Inner)
-    {
-        return Inner.X >= Outer.X && Inner.Y >= Outer.Y
-            && Inner.X + Inner.Width  <= Outer.X + Outer.Width
-            && Inner.Y + Inner.Height <= Outer.Y + Outer.Height;
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
     static Bool Find(ConstRef<Sequence<Area>> Free, UInt32 Width, UInt32 Height, Ref<Area> Output, Ref<UInt32> Score)
     {
         Bool Found = false;
@@ -77,10 +53,7 @@ namespace Studio::Texture
         // Every free rectangle the placement overlaps is split into what is left of it on each of its four sides.
         for (ConstRef<Area> Candidate : Free)
         {
-            const Bool Apart = Used.X >= Candidate.X + Candidate.Width  || Used.X + Used.Width  <= Candidate.X
-                            || Used.Y >= Candidate.Y + Candidate.Height || Used.Y + Used.Height <= Candidate.Y;
-
-            if (Apart)
+            if (!Used.Overlaps(Candidate))
             {
                 Next.Append(Candidate);
                 continue;
@@ -90,19 +63,17 @@ namespace Studio::Texture
             {
                 Next.Append(Candidate.X, Candidate.Y, Used.X - Candidate.X, Candidate.Height);
             }
-            if (Used.X + Used.Width < Candidate.X + Candidate.Width)
+            if (Used.GetRight() < Candidate.GetRight())
             {
-                const UInt32 Right = Used.X + Used.Width;
-                Next.Append(Right, Candidate.Y, Candidate.X + Candidate.Width - Right, Candidate.Height);
+                Next.Append(Used.GetRight(), Candidate.Y, Candidate.GetRight() - Used.GetRight(), Candidate.Height);
             }
             if (Used.Y > Candidate.Y)
             {
                 Next.Append(Candidate.X, Candidate.Y, Candidate.Width, Used.Y - Candidate.Y);
             }
-            if (Used.Y + Used.Height < Candidate.Y + Candidate.Height)
+            if (Used.GetBottom() < Candidate.GetBottom())
             {
-                const UInt32 Bottom = Used.Y + Used.Height;
-                Next.Append(Candidate.X, Bottom, Candidate.Width, Candidate.Y + Candidate.Height - Bottom);
+                Next.Append(Candidate.X, Used.GetBottom(), Candidate.Width, Candidate.GetBottom() - Used.GetBottom());
             }
         }
 
@@ -115,10 +86,10 @@ namespace Studio::Texture
 
             for (UInt Other = 0; Other < Next.GetSize() && !Covered; ++Other)
             {
-                if (Other != Index && Contains(Next[Other], Next[Index]))
+                if (Other != Index && Next[Other].Contains(Next[Index]))
                 {
                     // Of two identical rectangles, only the first survives.
-                    Covered = !Contains(Next[Index], Next[Other]) || Other < Index;
+                    Covered = !Next[Index].Contains(Next[Other]) || Other < Index;
                 }
             }
 
@@ -355,8 +326,8 @@ namespace Studio::Texture
         }
 
         // The search starts from the smallest bin that could hold every region, and grows it until they all fit.
-        UInt32 Width  = Min<UInt32>(RoundUp(Widest,  0xFFFF), Settings.Width);
-        UInt32 Height = Min<UInt32>(RoundUp(Tallest, 0xFFFF), Settings.Height);
+        UInt32 Width  = Min<UInt32>(CeilBit(Widest),  Settings.Width);
+        UInt32 Height = Min<UInt32>(CeilBit(Tallest), Settings.Height);
 
         if (Settings.Square)
         {
@@ -413,8 +384,8 @@ namespace Studio::Texture
 
         if (Settings.PowerOfTwo)
         {
-            Width  = RoundUp(Width,  Settings.Width);
-            Height = RoundUp(Height, Settings.Height);
+            Width  = Min<UInt32>(CeilBit(Width),  Settings.Width);
+            Height = Min<UInt32>(CeilBit(Height), Settings.Height);
         }
 
         if (Settings.Square)

@@ -42,6 +42,40 @@ namespace Studio::Texture
         {
             return Width > 0 && Height > 0;
         }
+
+        /// \brief Gets the column just past the right edge.
+        ///
+        /// \return The left edge plus the width, which may pass what 16 bits hold.
+        ZY_INLINE UInt32 GetRight() const
+        {
+            return static_cast<UInt32>(X) + Width;
+        }
+
+        /// \brief Gets the row just past the bottom edge.
+        ///
+        /// \return The top edge plus the height, which may pass what 16 bits hold.
+        ZY_INLINE UInt32 GetBottom() const
+        {
+            return static_cast<UInt32>(Y) + Height;
+        }
+
+        /// \brief Checks whether another rectangle lies wholly inside this one.
+        ///
+        /// \param Other The rectangle to check.
+        /// \return `true` if every pixel of \p Other is also one of this rectangle's, otherwise `false`.
+        ZY_INLINE Bool Contains(ConstRef<Area> Other) const
+        {
+            return Other.X >= X && Other.Y >= Y && Other.GetRight() <= GetRight() && Other.GetBottom() <= GetBottom();
+        }
+
+        /// \brief Checks whether another rectangle shares at least one pixel with this one.
+        ///
+        /// \param Other The rectangle to check.
+        /// \return `true` if the two rectangles overlap, otherwise `false`; merely touching edges do not.
+        ZY_INLINE Bool Overlaps(ConstRef<Area> Other) const
+        {
+            return X < Other.GetRight() && Other.X < GetRight() && Y < Other.GetBottom() && Other.Y < GetBottom();
+        }
     };
 
     /// \brief Represents one channel of a region read from another image, such as a height packed into alpha.
