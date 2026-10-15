@@ -11,6 +11,7 @@
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 #include "Exporter.hpp"
+#include "Studio.Texture/Process/Encoder.hpp"
 #include "Studio.Texture/Process/Mipmapper.hpp"
 #include "Studio.Texture/Process/Transcoder.hpp"
 #include <Zyphryon.Graphic/Metadata.hpp>
@@ -26,11 +27,14 @@ namespace Studio::Texture
 
     Bool Exporter::IsSupported(ZyGraphic::TextureFormat Format)
     {
+        if (Encoder::IsSupported(Format))
+        {
+            return true;
+        }
+
         const ZyGraphic::TextureMetadata Description = ZyGraphic::GetTextureMetadata(Format);
 
-        // TODO: Block-compressed
-
-        // Compressed, packed, depth and unsampleable formats each need an encoder this exporter does not have.
+        // Other compressed, packed, depth and unsampleable formats each need an encoder this exporter does not have.
         if (Description.IsCompressed() ||  Description.IsPacked || Description.IsDepth
          || Description.IsStencil      || !Description.IsSampler())
         {
@@ -85,6 +89,14 @@ namespace Studio::Texture
             return Blob();
         }
 
+        if (Encoder::IsSupported(Format) && (Width % 4 != 0 || Height % 4 != 0))
+        {
+            LOG_E("Texture: '{0}' needs sides that are multiples of four, which {1}x{2} are not",
+                ZyEnum::GetName(Format), Width, Height);
+
+            return Blob();
+        }
+
         for (ConstRef<Bitmap> Slice : Slices)
         {
             if (Slice.GetWidth() != Width || Slice.GetHeight() != Height)
@@ -108,7 +120,7 @@ namespace Studio::Texture
         {
             for (UInt32 Index = Start; Index < End; ++Index)
             {
-                Baked[Index] = Prepare(Move(Slices[Index]), Levels, Format);
+                Baked[Index] = Prepare(Scheduler, Move(Slices[Index]), Levels, Format);
             }
         });
 
@@ -168,8 +180,24 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Bitmap Exporter::Prepare(AnyRef<Bitmap> Source, UInt8 Levels, ZyGraphic::TextureFormat Format)
+    Bitmap Exporter::Prepare(
+        Ref<ZyJob::Service>      Scheduler,
+        AnyRef<Bitmap>           Source,
+        UInt8                    Levels,
+        ZyGraphic::TextureFormat Format)
     {
-        return Transcoder::Transcode(Mipmapper::Generate(Move(Source), Levels), Format);
+        if (!Encoder::IsSupported(Format))
+        {
+            return Transcoder::Transcode(Mipmapper::Generate(Move(Source), Levels), Format);
+        }
+
+        // A block format is packed from the plain one it decodes to, once every level is filtered and converted.
+        const Bitmap Plain = Transcoder::Transcode(Mipmapper::Generate(Move(Source), Levels), Encoder::GetSource(Format));
+
+        if (Plain.GetPixels().IsEmpty())
+        {
+            return Bitmap();
+        }
+        return Encoder::Encode(Scheduler, Plain, Format);
     }
 }

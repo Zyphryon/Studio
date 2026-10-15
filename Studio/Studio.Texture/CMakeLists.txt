@@ -55,3 +55,23 @@ IF (NOT TARGET STB)
 ENDIF ()
 
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} PRIVATE "STB")
+
+## -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+## Dependency (bc7enc_rdo) (MIT OR PUBLIC DOMAIN)
+## -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+## Only the block encoders are taken: rgbcx for BC1 to BC5, bc7enc for BC7.
+FetchContent_Declare(External_BC7Enc
+        GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo
+        GIT_TAG        b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
+        SOURCE_SUBDIR  None)
+FetchContent_MakeAvailable(External_BC7Enc)
+
+IF (NOT TARGET BC7Enc)
+
+    ADD_LIBRARY(BC7Enc STATIC ${external_bc7enc_SOURCE_DIR}/bc7enc.cpp ${external_bc7enc_SOURCE_DIR}/rgbcx.cpp)
+    TARGET_INCLUDE_DIRECTORIES(BC7Enc SYSTEM PUBLIC ${external_bc7enc_SOURCE_DIR})
+
+ENDIF ()
+
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} PRIVATE "BC7Enc")

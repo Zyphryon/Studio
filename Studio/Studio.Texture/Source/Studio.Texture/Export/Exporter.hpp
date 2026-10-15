@@ -68,12 +68,17 @@ namespace Studio::Texture
         /// \return The texture bytes, or an empty blob on failure.
         static Blob Export(Ref<ZyJob::Service> Scheduler, AnyRef<Bitmap> Source, ConstRef<Profile> Profile);
 
-        /// \brief Mips and transcodes one slice the way a bake does, for a live upload.
+        /// \brief Mips, transcodes and block-compresses one slice the way a bake does, for a live upload.
         ///
-        /// \param Source The slice, holding its base level alone.
-        /// \param Levels The number of levels, the base included.
-        /// \param Format The format every level is written in.
+        /// \param Scheduler The pool a block-compressed level's rows are packed on.
+        /// \param Source    The slice, holding its base level alone.
+        /// \param Levels    The number of levels, the base included.
+        /// \param Format    The format every level is written in.
         /// \return Every level in \p Format, or an empty bitmap on failure.
-        static Bitmap Prepare(AnyRef<Bitmap> Source, UInt8 Levels, ZyGraphic::TextureFormat Format);
+        static Bitmap Prepare(
+            Ref<ZyJob::Service>      Scheduler,
+            AnyRef<Bitmap>           Source,
+            UInt8                    Levels,
+            ZyGraphic::TextureFormat Format);
     };
 }
