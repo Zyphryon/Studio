@@ -1,0 +1,186 @@
+﻿// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Copyright (C) 2021-2026 by Agustin L. Alvarez. All rights reserved.
+//
+// This work is licensed under the terms of the MIT license.
+//
+// For a copy, see <https://opensource.org/licenses/MIT>.
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// [  HEADER  ]
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+#include "Exporter.hpp"
+#include "Texture/Process/Encoder.hpp"
+#include "Texture/Process/Resampler.hpp"
+#include "Texture/Process/Transcoder.hpp"
+#include <Zyphryon.Graphic/Metadata.hpp>
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// [   CODE   ]
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+namespace Studio::Texture
+{
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Exporter::IsSupported(ZyGraphic::TextureFormat Format)
+    {
+        if (Encoder::IsSupported(Format))
+        {
+            return true;
+        }
+
+        const ZyGraphic::TextureMetadata Description = ZyGraphic::GetTextureMetadata(Format);
+
+        // Other compressed, packed, depth and unsampleable formats each need an encoder this exporter does not have.
+        if (Description.IsCompressed() ||  Description.IsPacked || Description.IsDepth
+         || Description.IsStencil      || !Description.IsSampler())
+        {
+            return false;
+        }
+
+        // A raw integer format would have the sampler's values reinterpreted rather than scaled.
+        if (!Description.IsFloat && !Description.IsNormalized)
+        {
+            return false;
+        }
+
+        const UInt32 Bits = Description.BitsPerComponent();
+        return Description.IsFloat ? (Bits == 16 || Bits == 32) : (Bits == 8 || Bits == 16);
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Blob Exporter::Export(
+        Ref<ZyJob::Service>      Scheduler,
+        AnyRef<Sequence<Bitmap>> Slices,
+        ZyGraphic::TextureLayout Layout,
+        ConstRef<Profile>        Profile)
+    {
+        if (Slices.IsEmpty())
+        {
+            return Blob();
+        }
+
+        const UInt16 Width  = Slices[0].GetWidth();
+        const UInt16 Height = Slices[0].GetHeight();
+
+        const ZyGraphic::TextureFormat Format
+            = (Profile.Format == ZyGraphic::TextureFormat::Unspecified) ? Slices[0].GetFormat() : Profile.Format;
+
+        if (!IsSupported(Format))
+        {
+            LOG_E("Texture: '{0}' is not a format this exporter can write", ZyEnum::GetName(Format));
+
+            return Blob();
+        }
+
+        if (Encoder::IsSupported(Format) && (Width % 4 != 0 || Height % 4 != 0))
+        {
+            LOG_E("Texture: '{0}' needs sides that are multiples of four, which {1}x{2} are not",
+                ZyEnum::GetName(Format), Width, Height);
+
+            return Blob();
+        }
+
+        for (ConstRef<Bitmap> Slice : Slices)
+        {
+            if (Slice.GetWidth() != Width || Slice.GetHeight() != Height)
+            {
+                LOG_E("Texture: every slice must share one extent ({0}x{1} against {2}x{3})",
+                    Slice.GetWidth(), Slice.GetHeight(), Width, Height);
+
+                return Blob();
+            }
+        }
+
+        // Filtering runs at each surface's own depth, so the conversion to the target format happens last.
+        const UInt8 Levels = Profile.Mipmaps ? ZyGraphic::GetLevelCount(Width, Height) : 1;
+
+        Sequence<Bitmap> Baked;
+        Baked.Resize(Slices.GetSize());
+
+        // TODO: Resizer
+
+        Scheduler.Parallel(ZyJob::Lane::Compute, static_cast<UInt32>(Slices.GetSize()), [&](UInt32 Start, UInt32 End)
+        {
+            for (UInt32 Index = Start; Index < End; ++Index)
+            {
+                Baked[Index] = Prepare(Scheduler, Move(Slices[Index]), Levels, Format);
+            }
+        });
+
+        UInt32 Length = 0;
+
+        for (ConstRef<Bitmap> Result : Baked)
+        {
+            if (Result.GetPixels().IsEmpty())
+            {
+                return Blob();
+            }
+            Length += Result.GetPixels().GetSize();
+        }
+
+        // Gathered slice-major, which is the order the loader and both drivers read a sliced payload in.
+        Blob      Payload = Blob::Allocate<Byte>(Length);
+        Ptr<Byte> Cursor  = Payload.GetData<Byte>();
+
+        for (ConstRef<Bitmap> Result : Baked)
+        {
+            const ConstSpan<Byte> Bytes = Result.GetPixels();
+
+            Copy(Cursor, Bytes.GetSize(), Bytes.GetData());
+            Cursor += Bytes.GetSize();
+        }
+
+        const ConstSpan<Byte> Bytes = ConstSpan(Payload.GetData<Byte>(), Length);
+
+        Writer Output(Length + 32);
+        Output.Write<UInt32>(kMagic);
+        Output.Write<UInt16>(kVersion);
+        Output.Write(Layout);
+        Output.Write(Format);
+        Output.Write<UInt16>(Width);
+        Output.Write<UInt16>(Height);
+        Output.Write<UInt16>(static_cast<UInt16>(Baked.GetSize()));
+        Output.Write<UInt8>(Baked[0].GetLevels());
+
+        if (Profile.Compress)
+        {
+            Output.WriteBlockCompressed<UInt32>(Bytes, 9);
+        }
+        else
+        {
+            Output.Write<UInt32>(Length);
+            Output.WriteBlock<UInt32, Byte>(Bytes);
+        }
+        return Output.Detach();
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bitmap Exporter::Prepare(
+        Ref<ZyJob::Service>      Scheduler,
+        AnyRef<Bitmap>           Source,
+        UInt8                    Levels,
+        ZyGraphic::TextureFormat Format)
+    {
+        if (!Encoder::IsSupported(Format))
+        {
+            return Transcoder::Transcode(Resampler::Mipmap(Move(Source), Levels), Format);
+        }
+
+        // A block format is packed from the plain one it decodes to, once every level is filtered and converted.
+        const Bitmap Plain = Transcoder::Transcode(Resampler::Mipmap(Move(Source), Levels), Encoder::GetSource(Format));
+
+        if (Plain.GetPixels().IsEmpty())
+        {
+            return Bitmap();
+        }
+        return Encoder::Encode(Scheduler, Plain, Format);
+    }
+}

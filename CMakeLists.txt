@@ -48,9 +48,7 @@ FetchContent_MakeAvailable(External_ZyEngine)
 ## Modules
 ## -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-ADD_SUBDIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/Studio/Studio.Font)
-ADD_SUBDIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/Studio/Studio.Sound)
-ADD_SUBDIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/Studio/Studio.Texture)
+ADD_SUBDIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/Library)
 
 ## -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ## Host
@@ -58,6 +56,6 @@ ADD_SUBDIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/Studio/Studio.Texture)
 
 IF    (STUDIO_BUILD_APPLICATION)
 
-    ADD_SUBDIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/Studio/Studio.Application)
+    ADD_SUBDIRECTORY(${CMAKE_CURRENT_SOURCE_DIR}/Application)
 
 ENDIF ()

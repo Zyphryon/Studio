@@ -1,0 +1,247 @@
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Copyright (C) 2021-2026 by Agustin L. Alvarez. All rights reserved.
+//
+// This work is licensed under the terms of the MIT license.
+//
+// For a copy, see <https://opensource.org/licenses/MIT>.
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// [  HEADER  ]
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+#include "Exporter.hpp"
+#include <Zyphryon.Audio/Decoder/Adaptive.hpp>
+#include <opus.h>
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// [   CODE   ]
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+namespace Studio::Sound
+{
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Blob EncodeLinear(ConstRef<Sample> Source)
+    {
+        const ConstSpan<Real32> Samples = Source.GetSamples();
+
+        Blob              Payload = Blob::Allocate<SInt16>(Samples.GetSize());
+        const Ptr<SInt16> Output  = Payload.GetData<SInt16>();
+
+        for (UInt Index = 0; Index < Samples.GetSize(); ++Index)
+        {
+            Output[Index] = EncodeNormalized<SInt16>(Samples[Index]);
+        }
+        return Payload;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Blob EncodeAdaptive(ConstRef<Sample> Source)
+    {
+        using ZyAudio::Codec::Adaptive;
+
+        // The block size is read from the decoder, so the two can never disagree.
+        constexpr UInt32 kBlockFrames = Adaptive::kBlockFrames;
+        constexpr UInt32 kBlockStride = Adaptive::kBlockStride;
+
+        const ConstSpan<Real32> Samples = Source.GetSamples();
+        const UInt16            Stride  = Source.GetStride();
+        const UInt64            Frames  = Source.GetFrames();
+        const UInt64            Blocks  = (Frames + kBlockFrames - 1) / kBlockFrames;
+
+        Blob            Payload = Blob::Allocate<Byte>(Blocks * Stride * kBlockStride);
+        const Ptr<Byte> Output  = Payload.GetData<Byte>();
+
+        Zero(Output, Blocks * Stride * kBlockStride);
+
+        // The step index carries over from one block to the next, so a block boundary does not reset the quantizer
+        // to its coarsest step. Each block's header records the step it starts at, so the decoder can pick it up.
+        Array<Adaptive::Channel, ZyAudio::kMixerStride> States { };
+
+        for (UInt64 Block = 0; Block < Blocks; ++Block)
+        {
+            const UInt64 Origin = Block * kBlockFrames;
+
+            for (UInt16 Channel = 0; Channel < Stride; ++Channel)
+            {
+                const Ptr<Byte>        Cursor = Output + (Block * Stride + Channel) * kBlockStride;
+                Ref<Adaptive::Channel> State  = States[Channel];
+
+                State.Predictor = EncodeNormalized<SInt16>(Samples[Origin * Stride + Channel]);
+
+                Cursor[0] = static_cast<Byte>(State.Predictor & 0xFF);
+                Cursor[1] = static_cast<Byte>((State.Predictor >> 8) & 0xFF);
+                Cursor[2] = static_cast<Byte>(State.Step);
+                Cursor[3] = 0;
+
+                const UInt64 Length = Min<UInt64>(kBlockFrames, Frames - Origin);
+
+                for (UInt64 Frame = 1; Frame < Length; ++Frame)
+                {
+                    const SInt16 Value  = EncodeNormalized<SInt16>(Samples[(Origin + Frame) * Stride + Channel]);
+                    const UInt8  Nibble = Adaptive::Compress(State, Value);
+                    const UInt64 Slot   = 4 + ((Frame - 1) >> 1);
+
+                    // Two samples share a byte, the earlier one in the low nibble.
+                    Cursor[Slot] |= ((Frame - 1) & 1) ? (Nibble << 4) : Nibble;
+                }
+            }
+        }
+        return Payload;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Blob EncodeOpus(ConstRef<Sample> Source, SInt32 Bitrate)
+    {
+        constexpr UInt32 kPacketFrames = 960;
+        constexpr UInt32 kPacketBytes  = 4000;
+
+        const UInt16 Stride = Source.GetStride();
+
+        SInt32                 Result  = 0;
+        const Ptr<OpusEncoder> Encoder = ::opus_encoder_create(
+            Source.GetFrequency(), Stride, OPUS_APPLICATION_AUDIO, AddressOf(Result));
+
+        if (Result != OPUS_OK)
+        {
+            LOG_E("Sound: failed to create the Opus encoder ({0})", StrConvert(::opus_strerror(Result)));
+
+            return Blob();
+        }
+
+        ::opus_encoder_ctl(Encoder, OPUS_SET_BITRATE(Bitrate));
+
+        // The decoder has to discard exactly the encoder's lookahead, so it is stored as the pre-skip.
+        opus_int32 Lookahead = 0;
+        ::opus_encoder_ctl(Encoder, OPUS_GET_LOOKAHEAD(AddressOf(Lookahead)));
+
+        const ConstSpan<Real32> Samples = Source.GetSamples();
+        const UInt64            Frames  = Source.GetFrames();
+
+        // Encoding one lookahead's worth of silence past the end flushes the tail, so the last frames survive.
+        const UInt64 Total   = Frames + static_cast<UInt64>(Lookahead);
+        const UInt64 Packets = (Total + kPacketFrames - 1) / kPacketFrames;
+
+        Sequence<UInt16> Lengths(Packets);
+        Writer           Encoded(static_cast<UInt32>(Packets * 256));
+
+        Blob              Staging = Blob::Allocate<Real32>(kPacketFrames * Stride);
+        Blob              Packet  = Blob::Allocate<Byte>(kPacketBytes);
+        const Ptr<Real32> Input   = Staging.GetData<Real32>();
+
+        for (UInt64 Index = 0; Index < Packets; ++Index)
+        {
+            const UInt64 Origin = Index * kPacketFrames;
+
+            // Opus only takes whole frames, so the last packet is padded with silence rather than cut short.
+            Zero(Input, kPacketFrames * Stride);
+
+            if (Origin < Frames)
+            {
+                const UInt64 Length = Min<UInt64>(kPacketFrames, Frames - Origin);
+                Copy(Input, Length * Stride, Samples.GetData() + Origin * Stride);
+            }
+
+            const SInt32 Written
+                = ::opus_encode_float(Encoder, Input, kPacketFrames, Packet.GetData<Byte>(), kPacketBytes);
+
+            if (Written < 0)
+            {
+                LOG_E("Sound: failed to encode an Opus packet ({0})", StrConvert(::opus_strerror(Written)));
+
+                ::opus_encoder_destroy(Encoder);
+                return Blob();
+            }
+
+            Lengths.Append(static_cast<UInt16>(Written));
+            Encoded.Write<Byte>(Packet.GetData<Byte>(), static_cast<UInt32>(Written));
+        }
+
+        ::opus_encoder_destroy(Encoder);
+
+        const Blob Body = Encoded.Detach();
+
+        // The directory comes before the packets, so a seek can find its packet without walking the others.
+        Writer Output(static_cast<UInt32>(Body.GetSize() + Lengths.GetSize() * sizeof(UInt16) + 16));
+        Output.Write<UInt16>(static_cast<UInt16>(Lookahead));
+        Output.Write<UInt16>(kPacketFrames);
+        Output.Write<UInt32>(static_cast<UInt32>(Lengths.GetSize()));
+
+        for (const UInt16 Length : Lengths)
+        {
+            Output.Write<UInt16>(Length);
+        }
+
+        // The two-argument overload appends raw bytes, where the one-argument form would serialize the value itself.
+        Output.Write<Byte>(Body.GetData<Byte>(), static_cast<UInt32>(Body.GetSize()));
+        return Output.Detach();
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Blob Exporter::Export(ConstRef<Sample> Source, ConstRef<Profile> Profile)
+    {
+        if (Source.IsEmpty())
+        {
+            LOG_E("Sound: refusing to write a sound with no frames");
+
+            return Blob();
+        }
+
+        if (Source.GetStride() > ZyAudio::kMixerStride)
+        {
+            LOG_E("Sound: {0} channels is more than the mixer plays", Source.GetStride());
+
+            return Blob();
+        }
+
+        Blob Payload;
+
+        switch (Profile.Encoding)
+        {
+        case ZyAudio::Encoding::Adaptive:
+            Payload = EncodeAdaptive(Source);
+            break;
+        case ZyAudio::Encoding::Opus:
+            Payload = EncodeOpus(Source, Profile.Bitrate);
+            break;
+        case ZyAudio::Encoding::Linear:
+            Payload = EncodeLinear(Source);
+            break;
+        }
+
+        if (Payload == nullptr)
+        {
+            return Blob();
+        }
+
+        const ConstSpan<Byte> Bytes  = ConstSpan(Payload.GetData<Byte>(), Payload.GetSize());
+        const UInt32          Length = static_cast<UInt32>(Bytes.GetSize());
+
+        Writer Output(Length + 32);
+        Output.Write<UInt32>(kMagic);
+        Output.Write<UInt16>(kVersion);
+        Output.Write<ZyAudio::Encoding>(Profile.Encoding);
+        Output.Write<UInt16>(Source.GetStride());
+        Output.Write<UInt32>(Source.GetFrequency());
+        Output.Write<UInt64>(Source.GetFrames());
+
+        if (Profile.Compress)
+        {
+            Output.WriteBlockCompressed<UInt32>(Bytes, 6);
+        }
+        else
+        {
+            Output.Write<UInt32>(Length);
+            Output.WriteBlock<UInt32, Byte>(Bytes);
+        }
+        return Output.Detach();
+    }
+}
