@@ -32,7 +32,7 @@ namespace Studio::Font
         static constexpr UInt32 kMagic       = 'Z' | ('F' << 8) | ('N' << 16) | ('T' << 24);
 
         /// \brief The layout revision of the header this exporter writes.
-        static constexpr UInt16 kVersion     = 2;
+        static constexpr UInt16 kVersion     = 1;
 
         /// \brief The tag of the chunk that holds the kerning table.
         static constexpr UInt32 kKerning     = 'K' | ('E' << 8) | ('R' << 16) | ('N' << 24);
