@@ -12,6 +12,7 @@
 
 #include "Usage.hpp"
 #include <Font/Baker.hpp>
+#include <Model/Baker.hpp>
 #include <Sound/Baker.hpp>
 #include <Texture/Baker.hpp>
 
@@ -128,6 +129,34 @@ namespace Studio::Application
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+    static void PrintModels()
+    {
+        LOG_I("Models ({0}):", List(Model::Importer::kTypes));
+        LOG_I("  bake <source> [destination]     Bake a scene into a '.{0}', '.{1}', '.{2}' and a '.{3}' per clip",
+            Model::Exporter::kOutput, Model::Exporter::kMeshOutput, Model::Exporter::kSkeletonOutput,
+            Model::Exporter::kAnimationOutput);
+        LOG_I("");
+        LOG_I("Model switches:");
+        LOG_I("  --scale <factor>      Uniform factor every position is scaled by              [1]");
+        LOG_I("  --units <metres>      Metres one baked unit stands for, 0 to keep the source's [0]");
+        LOG_I("  --rate <hertz>        Samples per second every clip is keyed on               [30]");
+        LOG_I("  --interpolation <i>   Step, Linear, Cubic or Hermite                          [Linear]");
+        LOG_I("  --attributes <list>   Attributes to write and their streams, see below        [all in one]");
+        LOG_I("  --normals             Generate normals where the scene carries none           [on]");
+        LOG_I("  --tangents            Generate tangents where the scene carries none          [on]");
+        LOG_I("  --rig                 Carry the skin and its clips across                     [on]");
+        LOG_I("  The attribute list names Position, Normal, Tangent, TexCoord0, TexCoord1, Color0, BlendIndices and");
+        LOG_I("  BlendWeights; a bracketed run shares one interleaved stream and a bare name is a stream of its own,");
+        LOG_I("  as in '[Position],[Normal,Tangent,TexCoord0]'. It has to name Position, and an attribute the scene");
+        LOG_I("  lacks is left out. Cubic fits a spline through the samples for free; Hermite stores the source's");
+        LOG_I("  slope at each one and writes every sample three times over.");
+        LOG_I("  Every node is flattened into one mesh with four levels of detail, one primitive per material. The");
+        LOG_I("  manifest carries every material inline, its images renamed to the '.tex' the texture bake writes.");
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
     static void PrintSounds()
     {
         LOG_I("Sounds ({0}):", List(Sound::Importer::kTypes));
@@ -153,7 +182,7 @@ namespace Studio::Application
         LOG_I("Commands:");
         LOG_I("  help                            Print this text");
         LOG_I("  version                         Print the revision of every file Studio writes");
-        LOG_I("  bake <source> [destination]     Bake a texture, font or sound; the source's extension picks which");
+        LOG_I("  bake <source> [destination]     Bake a texture, font, model or sound, picked by the source's extension");
         LOG_I("");
         LOG_I("Every command:");
         LOG_I("  --preset <name>       Apply a preset: sprite, normal, relief, or one of your own");
@@ -163,6 +192,8 @@ namespace Studio::Application
         PrintTextures();
         LOG_I("");
         PrintFonts();
+        LOG_I("");
+        PrintModels();
         LOG_I("");
         PrintSounds();
     }

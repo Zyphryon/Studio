@@ -14,6 +14,7 @@
 
 #include "Outcome.hpp"
 #include <Font/Baker.hpp>
+#include <Model/Baker.hpp>
 #include <Sound/Baker.hpp>
 #include <Texture/Atlas/Composer.hpp>
 
@@ -23,7 +24,7 @@
 
 namespace Studio::Application
 {
-    /// \brief Runs every command Studio is typed with, over textures, fonts and sounds.
+    /// \brief Runs every command Studio is typed with, over textures, fonts, models and sounds.
     class Console final
     {
     public:
@@ -87,6 +88,12 @@ namespace Studio::Application
         /// \return How the command ended.
         Outcome BakeFont(ConstRef<Environment> Parsed) const;
 
+        /// \brief Bakes one source scene into a native model and the files it names.
+        ///
+        /// \param Parsed The parsed command line.
+        /// \return How the command ended.
+        Outcome BakeModel(ConstRef<Environment> Parsed) const;
+
         /// \brief Bakes one source sound into a native sound.
         ///
         /// \param Parsed The parsed command line.
@@ -143,6 +150,7 @@ namespace Studio::Application
 
         Texture::Baker mTextures;
         Font::Baker    mFonts;
+        Model::Baker   mModels;
         Sound::Baker   mSounds;
     };
 }

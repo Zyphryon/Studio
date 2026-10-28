@@ -26,4 +26,4 @@ SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Studio")
 ## Dependency (Studio)
 ## -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} PRIVATE "Studio_Font" "Studio_Sound" "Studio_Texture")
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} PRIVATE "Studio_Font" "Studio_Model" "Studio_Sound" "Studio_Texture")

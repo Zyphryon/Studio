@@ -212,7 +212,8 @@ namespace Studio::Application
 
     Console::Console(Ref<ZyJob::Service> Scheduler)
         : mTextures { Scheduler },
-          mFonts    { Scheduler }
+          mFonts    { Scheduler },
+          mModels   { Scheduler }
     {
     }
 
@@ -292,6 +293,9 @@ namespace Studio::Application
         LOG_I("  texture '.{0}' revision {1}", Texture::Exporter::kOutput, Texture::Exporter::kVersion);
         LOG_I("  tracker '.json' revision {0}", Texture::Tracker::kVersion);
         LOG_I("  font    '.{0}' revision {1}", Font::Exporter::kOutput, Font::Exporter::kVersion);
+        LOG_I("  mesh    '.{0}' revision {1}", Model::Exporter::kMeshOutput, Model::Exporter::kMeshVersion);
+        LOG_I("  rig     '.{0}' revision {1}", Model::Exporter::kSkeletonOutput, Model::Exporter::kSkeletonVersion);
+        LOG_I("  clip    '.{0}' revision {1}", Model::Exporter::kAnimationOutput, Model::Exporter::kAnimationVersion);
         LOG_I("  sound   '.{0}' revision {1}", Sound::Exporter::kOutput, Sound::Exporter::kVersion);
         return Outcome::Success;
     }
@@ -319,6 +323,10 @@ namespace Studio::Application
         if (Font::Importer::Accepts(Extension))
         {
             return BakeFont(Parsed);
+        }
+        if (Model::Importer::Accepts(Extension))
+        {
+            return BakeModel(Parsed);
         }
         if (Sound::Importer::Accepts(Extension))
         {
@@ -386,6 +394,27 @@ namespace Studio::Application
         });
 
         return mFonts.Bake(Source, Destination, Settings, Faces) ? Outcome::Success : Outcome::Failure;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Outcome Console::BakeModel(ConstRef<Environment> Parsed) const
+    {
+        const ConstSpan<Text> Operands = Parsed.GetOperands();
+
+        Model::Profile Settings;
+
+        if (!Model::Profile::From(Parsed, Settings))
+        {
+            return Outcome::Misuse;
+        }
+
+        const Text Source      = Operands[1];
+        const Str  Derived     = Path::Derive(Source, Text::Empty(), Model::Exporter::kOutput);
+        const Text Destination = (Operands.GetSize() > 2) ? Operands[2] : Text(Derived);
+
+        return mModels.Bake(Source, Destination, Settings) ? Outcome::Success : Outcome::Failure;
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
