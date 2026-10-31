@@ -231,6 +231,21 @@ namespace Studio::Model
             }
         }
 
+        // A bone without weight hanging off one that has it is a socket gear is held at, kept where its parent puts it.
+        Sequence<ufbx_matrix> Sockets;
+        Sockets.Fill(ufbx_identity_matrix, Native.nodes.count);
+
+        for (UInt Index = 0; Profile.Rig && Index < Native.nodes.count; ++Index)
+        {
+            ConstRef<ufbx_node> Node = * Native.nodes.data[Index];
+
+            if (Node.bone && Node.parent && !Binding[Node.typed_id] && Binding[Node.parent->typed_id])
+            {
+                Sockets[Node.typed_id] = ufbx_matrix_mul(Binding[Node.parent->typed_id], AddressOf(Node.node_to_parent));
+                Binding[Node.typed_id] = AddressOf(Sockets[Node.typed_id]);
+            }
+        }
+
         // ufbx lists every parent ahead of its children, which is the order the engine composes in.
         for (UInt Index = 0; Index < Native.nodes.count; ++Index)
         {
