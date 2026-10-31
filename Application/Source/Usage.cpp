@@ -145,12 +145,13 @@ namespace Studio::Application
         LOG_I("  --normals             Generate normals where the scene carries none           [on]");
         LOG_I("  --tangents            Generate tangents where the scene carries none          [on]");
         LOG_I("  --rig                 Carry the skin and its clips across                     [on]");
+        LOG_I("  --lod <n>             Reduced levels of detail after the full mesh, 0 to 3    [3]");
         LOG_I("  The attribute list names Position, Normal, Tangent, TexCoord0, TexCoord1, Color0, BlendIndices and");
         LOG_I("  BlendWeights; a bracketed run shares one interleaved stream and a bare name is a stream of its own,");
         LOG_I("  as in '[Position],[Normal,Tangent,TexCoord0]'. It has to name Position, and an attribute the scene");
         LOG_I("  lacks is left out. Cubic fits a spline through the samples for free; Hermite stores the source's");
         LOG_I("  slope at each one and writes every sample three times over.");
-        LOG_I("  Every node is flattened into one mesh with four levels of detail, one primitive per material. The");
+        LOG_I("  Every node is flattened into one mesh with its levels of detail, one primitive per material. The");
         LOG_I("  manifest carries every material inline, its images renamed to the '.tex' the texture bake writes.");
     }
 

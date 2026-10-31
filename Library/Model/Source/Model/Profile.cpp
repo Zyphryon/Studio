@@ -186,6 +186,20 @@ namespace Studio::Model
             }
         }
 
+        // The geometry unreduced always stays, and the coarsest level kept is drawn down to any size.
+        const UInt Reduced = Environment.GetNumber<UInt>("lod", Result.Details.GetSize() - 1);
+
+        if (Reduced >= Result.Details.GetSize())
+        {
+            return false;
+        }
+
+        while (Result.Details.GetSize() > Reduced + 1)
+        {
+            Result.Details.RemoveLast();
+        }
+        Result.Details[Reduced].Coverage = 0.0f;
+
         Output = Move(Result);
         return true;
     }
