@@ -112,6 +112,12 @@ namespace Studio::Model
             Attach(Entry, Scene::Slot::Displacement, Source.pbr.displacement_map);
             Attach(Entry, Scene::Slot::Occlusion,    Source.pbr.ambient_occlusion);
             Attach(Entry, Scene::Slot::Opacity,      Source.pbr.opacity);
+
+            // The glow's strength is kept apart from its colour, and a scene turns the glow off with a zero strength.
+            if (Source.pbr.emission_factor.has_value)
+            {
+                Entry.Factors[ZyEnum::Cast(Scene::Slot::Emissive)] *= Source.pbr.emission_factor.value_real;
+            }
         }
 
         UInt Widest = 3;
