@@ -247,25 +247,28 @@ namespace Studio::Model
 
         for (ConstRef<Scene::Material> Material : Materials)
         {
-            JsonObject Entry  = Table.AddObject();
-            JsonObject Images = Entry.SetObject("Images");
+            JsonObject Entry    = Table.AddObject();
+            JsonObject Images   = Entry.SetObject("Images");
+            JsonObject Samplers;
 
+            // Each image is sampled under its own name, which is the name a technique declares its sampler by.
             for (const Scene::Slot Slot : ZyEnum::GetValues<Scene::Slot>())
             {
                 if (ConstRef<Str> Path = Material.Images[ZyEnum::Cast(Slot)]; !Path.IsEmpty())
                 {
                     Images.SetObject(ZyEnum::GetName(Slot)).SetString("Path", Path);
-                }
-            }
 
-            // Only a material that names an image has anything to sample.
-            if (!Images.IsEmpty())
-            {
-                JsonObject Sampler = Entry.SetObject("Samplers").SetObject(kSampler);
-                Sampler.SetString("AddressModeU", "Repeat");
-                Sampler.SetString("AddressModeV", "Repeat");
-                Sampler.SetString("AddressModeW", "Repeat");
-                Sampler.SetString("Filter",       "Linear");
+                    if (!Samplers.IsValid())
+                    {
+                        Samplers = Entry.SetObject("Samplers");
+                    }
+
+                    JsonObject Sampler = Samplers.SetObject(ZyEnum::GetName(Slot));
+                    Sampler.SetString("AddressModeU", "Repeat");
+                    Sampler.SetString("AddressModeV", "Repeat");
+                    Sampler.SetString("AddressModeW", "Repeat");
+                    Sampler.SetString("Filter",       "Linear");
+                }
             }
 
             // Constants take the very names their images do, so a shader reads `Albedo` either way.

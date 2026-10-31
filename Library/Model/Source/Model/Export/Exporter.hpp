@@ -117,9 +117,6 @@ namespace Studio::Model
         /// \brief The bit an animation lane sets when it drives a bone's rotation.
         static constexpr UInt8  kRotation      = 1 << 2;
 
-        /// \brief The name the manifest states its one sampler under, which the technique must declare.
-        static constexpr Text   kSampler       = "Default";
-
         /// \brief Gets the kind of constant a texture slot is modulated by.
         ///
         /// \param Slot The texture slot.
