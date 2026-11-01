@@ -107,7 +107,10 @@ namespace Studio::Material
 
     Ref<Document::Binding> Document::Bind(Text Name)
     {
-        const auto Named = [Name](ConstRef<Binding> Entry) { return Entry.Name == Name; };
+        const auto Named = [Name](ConstRef<Binding> Entry)
+        {
+            return Entry.Name == Name;
+        };
 
         if (const SInt Found = Bindings.Find(Named); Found >= 0)
         {
@@ -124,7 +127,10 @@ namespace Studio::Material
 
     Ref<Document::Constant> Document::Set(Text Name)
     {
-        const auto Named = [Name](ConstRef<Constant> Entry) { return Entry.Name == Name; };
+        const auto Named = [Name](ConstRef<Constant> Entry)
+        {
+            return Entry.Name == Name;
+        };
 
         if (const SInt Found = Constants.Find(Named); Found >= 0)
         {
