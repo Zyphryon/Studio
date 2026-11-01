@@ -12,6 +12,7 @@
 
 #include "Importer.hpp"
 #include "Texture/Export/Exporter.hpp"
+#include "Texture/Image/Canvas.hpp"
 #include <Zyphryon.Graphic/Metadata.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -120,9 +121,17 @@ namespace Studio::Texture
             return Surface();
         }
 
+        if (!Canvas::Fits(static_cast<UInt16>(Width), static_cast<UInt16>(Height)))
+        {
+            LOG_E("Texture: source image is {0}x{1}, which is too large to work on", Width, Height);
+
+            stbi_image_free(Pixels);
+            return Surface();
+        }
+
         const ZyGraphic::TextureFormat Format = Resolve(Request, Real, Wide, sRGB);
 
-        // Adopt the decoder's buffer rather than copying it; the blob releases it through the matching free.
+        // The decoder's buffer is adopted rather than copied, and the blob releases it through the matching free.
         const UInt32 Size = ZyGraphic::GetLevelSize(Format, static_cast<UInt16>(Width), static_cast<UInt16>(Height), 0);
 
         Blob Data(static_cast<Ptr<Byte>>(Pixels), Size, Blob::Deleter([](Ptr<Byte> Address)
@@ -164,6 +173,13 @@ namespace Studio::Texture
         if (Width == 0 || Height == 0 || Layers == 0 || Levels == 0 || !Payload)
         {
             LOG_E("Texture: ZTEX header describes no surface to read back");
+
+            return Surface();
+        }
+
+        if (!Canvas::Fits(Width, Height))
+        {
+            LOG_E("Texture: ZTEX source is {0}x{1}, which is too large to work on", Width, Height);
 
             return Surface();
         }

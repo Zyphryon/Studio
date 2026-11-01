@@ -21,8 +21,7 @@
 
 namespace Studio::Texture
 {
-    /// \brief Decodes a source image into the surface the exporter consumes: the common formats through
-    ///        `stb_image`, and a baked texture read back from its native format.
+    /// \brief Decodes a source image into the surface the exporter consumes, through `stb_image` or as a baked texture.
     class Importer final
     {
     public:

@@ -25,7 +25,7 @@ namespace Studio::Texture
     {
         const Text Value = Environment.GetText(Name, Text::Empty());
 
-        // A missing switch is not an error: it just means the default is kept.
+        // A missing switch is not an error, it just keeps the default.
         if (Value.IsEmpty())
         {
             return Profile::Extent();
@@ -65,7 +65,7 @@ namespace Studio::Texture
         Result.Compress = Environment.GetBool("compressed", Result.Compress);
         Result.Layered  = Environment.GetBool("layered",    Result.Layered);
 
-        // The two divisions differ in unit: a cube is counted in faces, an array in texels.
+        // The two divisions differ in unit, a cube counted in faces and an array in texels.
         Result.Cube     = Extent::From(Environment, "cube");
         Result.Slice    = Extent::From(Environment, "array");
 

@@ -11,6 +11,7 @@
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 #include "Composer.hpp"
+#include "Texture/Process/Encoder.hpp"
 #include "Texture/Process/Resampler.hpp"
 #include <Zyphryon.Graphic/Metadata.hpp>
 
@@ -30,6 +31,24 @@ namespace Studio::Texture
             return Move(Source);
         }
         return Canvas::From(Resampler::Resize(Source.To(Canvas::kFormat), Width, Height));
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Canvas Crop(ConstRef<Bitmap> Source, ConstRef<Area> From)
+    {
+        const UInt32 Texel = ZyGraphic::GetTextureMetadata(Source.GetFormat()).BitsPerPixel / 8;
+        const UInt32 Pitch = Source.GetWidth() * Texel;
+        const UInt32 Row   = From.Width * Texel;
+
+        Blob Pixels = Blob::Allocate<Byte>(Row * From.Height);
+
+        for (UInt32 Y = 0; Y < From.Height; ++Y)
+        {
+            Copy(Pixels.GetData<Byte>() + Y * Row, Row, Source.GetPixels().GetData() + (From.Y + Y) * Pitch + From.X * Texel);
+        }
+        return Canvas::From(Bitmap(Source.GetFormat(), From.Width, From.Height, 1, Move(Pixels)));
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -137,6 +156,13 @@ namespace Studio::Texture
             return false;
         }
 
+        if (!Canvas::Fits(Atlas.Width, Atlas.Height))
+        {
+            LOG_E("Texture: a {0}x{1} slice is too large to draw into", Atlas.Width, Atlas.Height);
+
+            return false;
+        }
+
         if (!Measure(Atlas))
         {
             return false;
@@ -148,7 +174,7 @@ namespace Studio::Texture
             Atlas.Format = (mProfile.Format != ZyGraphic::TextureFormat::Unspecified) ? mProfile.Format : mFirst;
         }
 
-        // Only an array can grow; a flat atlas with a region past its one slice is refused below.
+        // Only an array can grow, so a flat atlas with a region past its one slice is refused below.
         if (Atlas.Layout == ZyGraphic::TextureLayout::Texture2DArray)
         {
             Atlas.Slices = Atlas.GetDepth();
@@ -198,10 +224,14 @@ namespace Studio::Texture
                 return false;
             }
 
-            const Canvas Source = Canvas::From(Fetch(Entry.Source, false)->Slices[Entry.Layer]);
+            Canvas Cut = Crop(Fetch(Entry.Source, false)->Slices[Entry.Layer], Entry.From);
 
-            Canvas Cut(Entry.From.Width, Entry.From.Height);
-            Cut.Blit(Source, Entry.From.X, Entry.From.Y, Entry.From.Width, Entry.From.Height, 0, 0);
+            if (!Cut.IsValid())
+            {
+                LOG_E("Texture: '{0}' could not be read from its source", Entry.Name);
+
+                return false;
+            }
 
             // A region placed at another size, as in an array, is resized to fit.
             Cut = Fit(Move(Cut), Place.Width, Place.Height);
@@ -238,9 +268,12 @@ namespace Studio::Texture
 
         Output.Clear();
 
+        // A block format is written from its plain source, which the exporter then encodes.
+        const ZyGraphic::TextureFormat Plain = Encoder::IsSupported(Atlas.Format) ? Encoder::GetSource(Atlas.Format) : Atlas.Format;
+
         for (ConstRef<Canvas> Page : Pages)
         {
-            Bitmap Slice = Page.To(Atlas.Format);
+            Bitmap Slice = Page.To(Plain);
 
             if (Slice.GetPixels().IsEmpty())
             {

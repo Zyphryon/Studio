@@ -86,7 +86,7 @@ namespace Studio::Texture
 
         Base.Blur(Settings.Input.Blur, Settings.Input.Wrap);
 
-        // How much the outer rows count against the centre one; the central difference is the one with no outer rows.
+        // How much the outer rows count against the centre one, the central difference having no outer rows.
         static constexpr Real32 kWeights[][2] =
         {
             { 0.0f, 1.0f  },    // Central
@@ -129,8 +129,7 @@ namespace Studio::Texture
         {
             for (UInt32 X = 0; X < Width; ++X)
             {
-                // A normal leans away from rising height, hence the negated X. Image rows run downward while the
-                // map's +Y points up, so the vertical slope keeps its sign.
+                // A normal leans away from rising height, so X is negated, while Y keeps its sign as rows run down.
                 Real32 NX = -Slopes[Y * Width + X].GetX() * Settings.Strength;
                 Real32 NY =  Slopes[Y * Width + X].GetY() * Settings.Strength;
 

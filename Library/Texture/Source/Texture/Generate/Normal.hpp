@@ -28,16 +28,16 @@ namespace Studio::Texture
         /// \brief Specifies the filter a slope is measured with.
         enum class Kernel : UInt8
         {
-            Central,    ///< The two neighbours along the axis; the sharpest, and the noisiest.
-            Sobel,      ///< A 3x3 filter weighted toward the centre row; the usual choice.
+            Central,    ///< The two neighbours along the axis, the sharpest and the noisiest.
+            Sobel,      ///< A 3x3 filter weighted toward the centre row, the usual choice.
             Scharr,     ///< A 3x3 filter tuned to respond the same in every direction.
-            Prewitt,    ///< A 3x3 filter that weighs its three rows alike; the softest.
+            Prewitt,    ///< A 3x3 filter that weighs its three rows alike, the softest.
         };
 
         /// \brief Represents the settings a normal map is drawn with.
         struct Settings final
         {
-            /// The way the image is read as a height; masked pixels are ground, so the outline stands up.
+            /// The way the image is read as a height, masked pixels being ground so the outline stands up.
             Elevation Input;
 
             /// The filter slopes are measured with.
@@ -52,10 +52,10 @@ namespace Studio::Texture
             /// The weight of each coarser scale relative to the one before it.
             Real32    Falloff  = 0.5f;
 
-            /// Whether the X axis is mirrored.
+            /// `true` to mirror the X axis, `false` to keep it.
             Bool      FlipX    = false;
 
-            /// Whether the Y axis is mirrored, for programs that expect green to point down.
+            /// `true` to mirror the Y axis for programs that expect green to point down, `false` to keep it.
             Bool      FlipY    = false;
 
             /// \brief Reads the settings from a command line.

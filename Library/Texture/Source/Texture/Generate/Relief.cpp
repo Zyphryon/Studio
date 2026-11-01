@@ -29,7 +29,7 @@ namespace Studio::Texture
 
         Field Result(Source.GetWidth(), Source.GetHeight());
 
-        // Empty pixels are the outline, at distance zero; every drawn pixel starts out unreached.
+        // Empty pixels are the outline at distance zero, and every drawn pixel starts out unreached.
         for (SInt32 Y = 0; Y < Height; ++Y)
         {
             for (SInt32 X = 0; X < Width; ++X)
@@ -51,8 +51,7 @@ namespace Studio::Texture
         constexpr Real32 kStraight = 1.0f;
         constexpr Real32 kDiagonal = 1.41421356f;
 
-        // A chamfer distance transform: one pass down and one back up, each pixel taking the nearest distance its
-        // already visited neighbours offer.
+        // A two-pass chamfer distance transform, each pixel taking the nearest distance its visited neighbours offer.
         for (SInt32 Y = 0; Y < Height; ++Y)
         {
             for (SInt32 X = 0; X < Width; ++X)

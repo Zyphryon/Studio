@@ -28,6 +28,8 @@ namespace Studio::Texture
           mHeight { Height },
           mPixels { Blob::Allocate<Byte>(ZyGraphic::GetLevelSize(kFormat, Width, Height, 0)) }
     {
+        ZY_ASSERT(Fits(Width, Height), "A canvas must fit a 32-bit size, which its callers check first");
+
         Zero(mPixels.GetData<Byte>(), mPixels.GetSize());
     }
 

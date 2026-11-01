@@ -250,10 +250,10 @@ namespace Studio::Texture
     /// \brief Reads one texel as a linear-space colour.
     ///
     /// \tparam Type     The type each channel is stored as.
-    /// \tparam sRGB     `true` if the colour channels are sRGB-encoded.
+    /// \tparam sRGB     `true` if the colour channels are sRGB-encoded, `false` if they are linear.
     /// \param  Source   The address of the level.
     /// \param  Index    The texel index within the level.
-    /// \param  Channels The number of channels a texel carries; any it lacks read as zero, and alpha as opaque.
+    /// \param  Channels The number of channels a texel carries, any it lacks reading as zero and alpha as opaque.
     /// \return The texel, in linear space.
     template<typename Type, Bool sRGB>
     ZY_INLINE Color Load(ConstPtr<Byte> Source, UInt32 Index, UInt32 Channels)
@@ -286,7 +286,7 @@ namespace Studio::Texture
     /// \brief Writes one texel from a linear-space colour.
     ///
     /// \tparam Type     The type each channel is stored as.
-    /// \tparam sRGB     `true` if the colour channels are sRGB-encoded.
+    /// \tparam sRGB     `true` if the colour channels are sRGB-encoded, `false` if they are linear.
     /// \param  Target   The address of the level.
     /// \param  Index    The texel index within the level.
     /// \param  Channels The number of channels a texel carries.

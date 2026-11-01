@@ -65,6 +65,14 @@ namespace Studio::Texture
             return Blob();
         }
 
+        // The header counts layers in 16 bits, so more slices than that would be written as some other number.
+        if (Slices.GetSize() > kMaximum<UInt16>)
+        {
+            LOG_E("Texture: {0} slices are more than the {1} one texture can hold", Slices.GetSize(), kMaximum<UInt16>);
+
+            return Blob();
+        }
+
         const UInt16 Width  = Slices[0].GetWidth();
         const UInt16 Height = Slices[0].GetHeight();
 
@@ -113,7 +121,7 @@ namespace Studio::Texture
             }
         });
 
-        UInt32 Length = 0;
+        UInt64 Total = 0;
 
         for (ConstRef<Bitmap> Result : Baked)
         {
@@ -121,8 +129,18 @@ namespace Studio::Texture
             {
                 return Blob();
             }
-            Length += Result.GetPixels().GetSize();
+            Total += Result.GetPixels().GetSize();
         }
+
+        // The payload's length is written in 32 bits, so slices that add up past it cannot be stored.
+        if (Total > kMaximum<UInt32>)
+        {
+            LOG_E("Texture: {0} slice(s) come to {1} bytes, past what one texture can hold", Baked.GetSize(), Total);
+
+            return Blob();
+        }
+
+        const UInt32 Length = static_cast<UInt32>(Total);
 
         // Gathered slice-major, which is the order the loader and both drivers read a sliced payload in.
         Blob      Payload = Blob::Allocate<Byte>(Length);

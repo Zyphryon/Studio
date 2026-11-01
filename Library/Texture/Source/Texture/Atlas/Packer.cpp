@@ -25,7 +25,7 @@ namespace Studio::Texture
     {
         Bool Found = false;
 
-        // Best short side fit: the free rectangle leaving the thinnest sliver along its tighter side.
+        // Best short side fit, taking the free rectangle that leaves the thinnest sliver along its tighter side.
         for (ConstRef<Area> Candidate : Free)
         {
             if (Candidate.Width < Width || Candidate.Height < Height)
@@ -272,9 +272,9 @@ namespace Studio::Texture
                 }
 
                 Entry.Slice = static_cast<UInt16>(Index);
-                Entry.Rect  = Area(static_cast<UInt16>((Width - Wide) / 2), 
+                Entry.Rect  = Area(static_cast<UInt16>((Width - Wide) / 2),
                                    static_cast<UInt16>((Height - High) / 2),
-                                   static_cast<UInt16>(Wide), 
+                                   static_cast<UInt16>(Wide),
                                    static_cast<UInt16>(High));
             }
 
@@ -295,8 +295,7 @@ namespace Studio::Texture
             return static_cast<UInt32>(Size.Width) * Size.Height;
         };
 
-        // Regions are placed largest first, which packs tightest, while the tracker keeps the order they were
-        // authored in. Equal areas keep that order too, so the same input always packs the same way.
+        // Regions go largest first, ties in authored order, so the same input always packs the same way.
         Sequence<UInt> Order;
 
         for (UInt Index = 0; Index < Atlas.Regions.GetSize(); ++Index)

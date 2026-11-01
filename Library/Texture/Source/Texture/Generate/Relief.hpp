@@ -20,7 +20,7 @@
 
 namespace Studio::Texture
 {
-    /// \brief Draws a greyscale relief map out of an image: white where it is raised, darker as it sinks.
+    /// \brief Draws a greyscale relief map out of an image, white where it is raised and darker as it sinks.
     class Relief final
     {
     public:
@@ -37,25 +37,25 @@ namespace Studio::Texture
         /// \brief Represents the settings a relief map is drawn with.
         struct Settings final
         {
-            /// The way the image is read as a height; masked pixels sink to the bottom.
+            /// The way the image is read as a height, masked pixels sinking to the bottom.
             Elevation Input;
 
-            /// The height read as the bottom; anything below is clamped to it.
+            /// The height read as the bottom, anything below clamped to it.
             Real32    Low        = 0.0f;
 
-            /// The height read as the top; anything above is clamped to it.
+            /// The height read as the top, anything above clamped to it.
             Real32    High       = 1.0f;
 
-            /// The spread of the heights about their middle; above one hardens.
+            /// The spread of the heights about their middle, hardening them above one.
             Real32    Contrast   = 1.0f;
 
             /// The amount added to every height, before the contrast is applied.
             Real32    Brightness = 0.0f;
 
-            /// The exponent the heights are raised to; above one sinks the middle.
+            /// The exponent the heights are raised to, sinking the middle above one.
             Real32    Gamma      = 1.0f;
 
-            /// The distance from the outline to full height, in pixels; zero for none.
+            /// The distance from the outline to full height, in pixels, or zero for none.
             Real32    Bevel      = 0.0f;
 
             /// The shape the bevel rises in.

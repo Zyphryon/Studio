@@ -40,7 +40,7 @@ namespace Studio::Texture
                 /// The row, counted from the top edge.
                 UInt16 Row    = 0;
 
-                /// Whether the cell is rotated by 180 degrees as it is cut.
+                /// `true` to rotate the cell by 180 degrees as it is cut, `false` to cut it as it lies.
                 Bool   Turned = false;
             };
 

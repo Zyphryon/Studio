@@ -70,7 +70,7 @@ namespace Studio::Texture
         /// \brief Gets a source, reading it the first time it is asked for.
         ///
         /// \param Source The source, relative to the composer's folder.
-        /// \param Data   `true` to read it as linear data.
+        /// \param Data   `true` to read it as linear data, `false` to read it in the profile's colour space.
         /// \return The decoded source, or `nullptr` on failure.
         ConstPtr<Surface> Fetch(Text Source, Bool Data);
 

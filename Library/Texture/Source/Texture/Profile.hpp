@@ -51,16 +51,16 @@ namespace Studio::Texture
         /// The format to write, or `Unspecified` to keep the source's own depth and channel count.
         ZyGraphic::TextureFormat Format   = ZyGraphic::TextureFormat::Unspecified;
 
-        /// Whether a full mip chain down to 1x1 is generated, rather than the base level alone.
+        /// `true` to generate a full mip chain down to 1x1, `false` to write the base level alone.
         Bool                     Mipmaps  = false;
 
-        /// Whether the source holds linear values; `false` for colour art authored in sRGB.
+        /// `true` if the source holds linear values, `false` for colour art authored in sRGB.
         Bool                     Linear   = true;
 
-        /// Whether the payload is LZ4-compressed, which is only kept when it comes out smaller.
+        /// `true` to LZ4-compress the payload when it comes out smaller, `false` to store it raw.
         Bool                     Compress = true;
 
-        /// Whether a lone 2D image is written as a one-slice array, for shaders that only sample arrays.
+        /// `true` to write a lone 2D image as a one-slice array for array-only shaders, `false` to keep it 2D.
         Bool                     Layered  = false;
 
         /// The grid a cube atlas packs its six faces in, counted in faces.

@@ -23,7 +23,7 @@ namespace Studio::Texture
     /// \brief Represents the bitmaps one source decodes into, and the layout they make up together.
     struct Surface final
     {
-        /// The layout the slices make up: a plain 2D texture, an array or a cube.
+        /// The layout the slices make up, a plain 2D texture, an array or a cube.
         ZyGraphic::TextureLayout Layout = ZyGraphic::TextureLayout::Texture2D;
 
         /// The bitmaps, one per array slice or cube face, in the order the layout addresses them.

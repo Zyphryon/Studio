@@ -36,16 +36,16 @@ namespace Studio::Texture
         /// The part of each pixel read as its height.
         Channel Source = Channel::Luminance;
 
-        /// Whether the height is inverted, so dark reads as raised.
+        /// `true` to invert the height so dark reads as raised, `false` to read light as raised.
         Bool    Invert = false;
 
         /// The blur applied to the height, in pixels.
         Real32  Blur   = 0.0f;
 
-        /// Whether the edges wrap around, as they do for a texture that tiles.
+        /// `true` to wrap around the edges as a tiling texture does, `false` to clamp to them.
         Bool    Wrap   = false;
 
-        /// Whether transparent pixels are ground.
+        /// `true` to read transparent pixels as ground, `false` to read them like any other.
         Bool    Masked = true;
 
         /// \brief Reads the settings from a command line.
@@ -112,7 +112,7 @@ namespace Studio::Texture
 
         /// \brief Smooths the field with a gaussian of the given spread.
         ///
-        /// \param Sigma The spread, in pixels; zero leaves the field as it is.
+        /// \param Sigma The spread, in pixels, or zero to leave the field as it is.
         /// \param Wrap  `true` to wrap around the edges, `false` to clamp to them.
         void Blur(Real32 Sigma, Bool Wrap);
 

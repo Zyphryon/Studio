@@ -71,7 +71,7 @@ namespace Studio::Texture
         /// \brief Checks whether another rectangle shares at least one pixel with this one.
         ///
         /// \param Other The rectangle to check.
-        /// \return `true` if the two rectangles overlap, otherwise `false`; merely touching edges do not.
+        /// \return `true` if the two rectangles overlap, otherwise `false`, as merely touching edges do not.
         ZY_INLINE Bool Overlaps(ConstRef<Area> Other) const
         {
             return X < Other.GetRight() && Other.X < GetRight() && Y < Other.GetBottom() && Other.Y < GetBottom();
@@ -91,7 +91,7 @@ namespace Studio::Texture
         UInt8 Origin = 0;
     };
 
-    /// \brief Represents one image of an atlas: where it is taken from, and where it sits.
+    /// \brief Represents one image of an atlas, where it is taken from and where it sits.
     struct Region final
     {
         /// The name a consumer looks the image up by.
@@ -115,7 +115,7 @@ namespace Studio::Texture
         /// The channels taken from other images, after the image is fitted.
         Sequence<Splice> Channels;
 
-        /// Whether the region is retired: still drawn, but no longer offered.
+        /// `true` if the region is retired, still drawn but no longer offered, `false` while it is offered.
         Bool             Retired = false;
     };
 
@@ -128,7 +128,7 @@ namespace Studio::Texture
         /// The texture the regions are drawn into, relative to the tracker's own folder.
         Str                      Texture;
 
-        /// The layout the texture is written as: a flat atlas, or an array of pages.
+        /// The layout the texture is written as, a flat atlas or an array of pages.
         ZyGraphic::TextureLayout Layout   = ZyGraphic::TextureLayout::Texture2D;
 
         /// The format the texture is written in, or `Unspecified` to take the first source's.

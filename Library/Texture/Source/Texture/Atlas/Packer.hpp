@@ -37,7 +37,7 @@ namespace Studio::Texture
         enum class Fitting : UInt8
         {
             Stretch,    ///< Resized to fill the slice, whatever its shape.
-            Center,     ///< Kept at its own size, centred; one larger than the slice does not fit.
+            Center,     ///< Kept at its own size and centred, refused when larger than the slice.
             Contain,    ///< Kept at its own size, centred, and shrunk with its shape kept when larger than the slice.
         };
 
@@ -65,13 +65,13 @@ namespace Studio::Texture
             /// The pixels each region's edge is repeated outward by.
             UInt16          Extrude    = 0;
 
-            /// Whether each side of a slice is rounded up to a power of two.
+            /// `true` to round each side of a slice up to a power of two, `false` to keep it as tight as it packs.
             Bool            PowerOfTwo = true;
 
-            /// Whether a slice is kept square.
+            /// `true` to keep a slice square, `false` to let its sides differ.
             Bool            Square     = false;
 
-            /// Whether regions that do not fit spill onto further slices.
+            /// `true` to spill regions that do not fit onto further slices, `false` to fail the pack.
             Bool            Pages      = false;
 
             /// \brief Reads the settings from a command line.

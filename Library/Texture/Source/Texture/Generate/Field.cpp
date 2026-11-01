@@ -67,8 +67,7 @@ namespace Studio::Texture
             Weight /= Total;
         }
 
-        // A gaussian is separable, so a pass across and then a pass down equal the full 2D kernel at a fraction
-        // of the cost.
+        // A gaussian is separable, so a pass across and a pass down equal the full 2D kernel at a fraction of the cost.
         Field Across(mWidth, mHeight);
 
         for (SInt32 Y = 0; Y < mHeight; ++Y)

@@ -124,12 +124,22 @@ namespace Studio::Texture
         /// \return The canvas, or an empty one if the bitmap cannot be read.
         static Canvas From(ConstRef<Bitmap> Source);
 
+        /// \brief Checks whether an image of the given extent can be worked on, its widest pixels counted in 32 bits.
+        ///
+        /// \param Width  The width, in pixels.
+        /// \param Height The height, in pixels.
+        /// \return `true` if a canvas of that extent fits a 32-bit size, `false` if it is too large to be held.
+        ZY_INLINE static Bool Fits(UInt16 Width, UInt16 Height)
+        {
+            return static_cast<UInt64>(Width) * Height * sizeof(Real32) * 4 <= kMaximum<UInt32>;
+        }
+
         /// \brief Brings a coordinate that may lie past the edge of an image back onto it.
         ///
         /// \param Coordinate The column or row, which may be negative or past the extent.
         /// \param Extent     The width or height of the image.
-        /// \param Wrap       Whether the image tiles, so a coordinate past one edge comes back in at the other.
-        /// \return The coordinate on the image: wrapped around if \p Wrap, otherwise held to the nearest edge.
+        /// \param Wrap       `true` if the image tiles, `false` to hold the coordinate to the nearest edge.
+        /// \return The coordinate on the image, wrapped around if \p Wrap, otherwise held to the nearest edge.
         ZY_INLINE static UInt32 Reach(SInt32 Coordinate, SInt32 Extent, Bool Wrap)
         {
             if (Wrap)
