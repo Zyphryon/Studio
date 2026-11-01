@@ -32,6 +32,14 @@ namespace Studio::Sound
 
     static Sample Resample(AnyRef<Blob> Samples, UInt32 Frequency, UInt16 Stride, UInt64 Frames)
     {
+        // The resampler holds one carry per mixer channel, so a wider source is refused before it runs over them.
+        if (Stride == 0 || Stride > ZyAudio::kMixerStride || Frequency == 0)
+        {
+            LOG_E("Sound: a source of {0} channels at {1} Hz is not one the mixer plays", Stride, Frequency);
+
+            return Sample();
+        }
+
         if (Frequency == ZyAudio::kMixerFrequency)
         {
             return Sample(Move(Samples), Frequency, Stride, Frames);
