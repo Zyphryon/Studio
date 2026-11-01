@@ -20,7 +20,7 @@
 
 namespace Studio::Font
 {
-    /// \brief Represents one outline segment: a line, a quadratic Bézier, or a cubic Bézier.
+    /// \brief Represents one outline segment, which is a line, a quadratic Bézier or a cubic Bézier.
     class Edge final
     {
     public:

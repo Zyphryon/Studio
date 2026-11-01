@@ -35,6 +35,12 @@ namespace Studio::Font
                 continue;
             }
 
+            // A glyph wider or taller than a whole empty page can never be placed, however many pages open.
+            if (Entry.Data.Width + 2 * Padding > Side || Entry.Data.Height + 2 * Padding > Side)
+            {
+                return 0;
+            }
+
             // A cell that no longer fits on this shelf starts the next one above it.
             if (CursorX + Entry.Data.Width + Padding > Side)
             {
@@ -48,12 +54,6 @@ namespace Studio::Font
                 // Without pages the caller is still growing the sheet, so running out only means this side was
                 // too small.
                 if (!Paginate)
-                {
-                    return 0;
-                }
-
-                // A glyph too tall for a whole empty page can never be placed, however many pages open.
-                if (CursorY == Padding)
                 {
                     return 0;
                 }
@@ -78,7 +78,7 @@ namespace Studio::Font
 
     Atlas::Layout Atlas::Arrange(Ref<Sequence<Cell>> Cells, UInt32 Padding, UInt32 Limit)
     {
-        // Tallest first keeps each shelf tight; the codepoint breaks ties so two bakes lay out the same.
+        // Tallest first keeps each shelf tight, and the codepoint breaks ties so two bakes lay out the same.
         Cells.Sort([](ConstRef<Cell> Left, ConstRef<Cell> Right)
         {
             if (Left.Data.Height != Right.Data.Height)

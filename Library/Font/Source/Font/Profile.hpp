@@ -50,7 +50,7 @@ namespace Studio::Font
         /// The codepoint ranges to bake, which may overlap and need not be in order.
         Sequence<Interval> Charset;
 
-        /// \brief Reads the settings from a command line; a charset that cannot be read is left empty.
+        /// \brief Reads the settings from a command line, leaving a charset that cannot be read empty.
         ///
         /// \param Environment The parsed switches.
         /// \return The settings, defaulted where a switch is missing.
@@ -58,7 +58,7 @@ namespace Studio::Font
 
         /// \brief Reads a charset description into a list of ranges.
         ///
-        /// \param Description The charset description.
+        /// \param Description The presets, codepoints and ranges, split by commas.
         /// \param Output      Receives the ranges.
         /// \return `true` if every entry was understood, otherwise `false`.
         static Bool Parse(Text Description, Ref<Sequence<Interval>> Output);

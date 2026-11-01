@@ -155,8 +155,7 @@ namespace Studio::Font
 
         for (ConstRef<Cell> Entry : Cells)
         {
-            // The glyph table is written to disk as one block, so the glyph is value-initialized to keep any padding
-            // between its fields from putting indeterminate bytes in the file.
+            // The glyph is value-initialized, so a blank is written with zero rectangles, not indeterminate ones.
             ZyRender::Font::Glyph Glyph { };
             Glyph.Page = static_cast<UInt16>(Entry.Page);
 

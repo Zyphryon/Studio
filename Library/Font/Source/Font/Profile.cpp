@@ -55,7 +55,7 @@ namespace Studio::Font
             return true;
         }
 
-        // A dash splits a range; an entry without one is a single codepoint.
+        // A dash splits a range, and an entry without one is a single codepoint.
         const SInt Dash  = StrFind(Entry, '-');
         const Text First = Dash == -1 ? Entry : Entry.Slice(0, Dash);
         const Text Last  = Dash == -1 ? Entry : Entry.Slice(Dash + 1);
