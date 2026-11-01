@@ -12,6 +12,7 @@
 
 #include "Exporter.hpp"
 #include <Zyphryon.Graphic/Mesh.hpp>
+#include <Zyphryon.Math/Motion/Playback.hpp>
 #include <Zyphryon.Render/Model/Skeleton3D.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -229,7 +230,7 @@ namespace Studio::Model
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Str Exporter::ExportModel(Text Mesh, Text Skeleton, ConstSpan<Scene::Material> Materials)
+    Str Exporter::ExportModel(Text Mesh, Text Skeleton, ConstSpan<Scene::Material> Materials, ConstSpan<Str> Clips, ConstSpan<Str> Once)
     {
         JsonValue Root;
         Root.SetObject();
@@ -306,6 +307,21 @@ namespace Studio::Model
                     Parameter.SetEnum("Type", ZyGraphic::Uniform::Float);
                     Parameter.SetNumber("Value", Factor.GetRed());
                 }
+            }
+        }
+
+        // Named by the clip alone, so a game asks for a clip without knowing which file holds it.
+        if (!Clips.IsEmpty())
+        {
+            const Text Stem = StrBeforeLast(Mesh, '.');
+            JsonArray  List = Top.SetArray("Clips");
+
+            for (ConstRef<Str> Clip : Clips)
+            {
+                JsonObject Entry = List.AddObject();
+                Entry.SetString("Name", Clip);
+                Entry.SetString("Path", Str::Print<"{0}.{1}.{2}">(Stem, Clip, kAnimationOutput));
+                Entry.SetEnum("Repeat", Once.Contains(Clip) ? Repeat::Once : Repeat::Loop);
             }
         }
         return JsonDocument::Dump(Root, "    ");

@@ -178,6 +178,14 @@ namespace Studio::Model
             }
         }
 
+        StrSplit(Environment.GetText("once", Text::Empty()), ',', [&Result](Text Name)
+        {
+            if (const Text Entry = StrTrim(Name); !Entry.IsEmpty())
+            {
+                Result.Once.Append(Entry);
+            }
+        });
+
         if (const Text Description = Environment.GetText("attributes", Text::Empty()); !Description.IsEmpty())
         {
             if (!Parse(Description, Result.Attributes))

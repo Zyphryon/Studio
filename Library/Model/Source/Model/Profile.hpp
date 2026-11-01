@@ -67,6 +67,9 @@ namespace Studio::Model
         /// The way the runtime reads between a clip's samples, Hermite storing the source's slope three times over.
         Interpolation      Blend      = Interpolation::Linear;
 
+        /// The names of the clips that play once and hold their last pose, every other clip looping.
+        Sequence<Str>      Once;
+
         /// The attributes to write and the streams they are grouped into, those the scene lacks being left out.
         Sequence<Channel>  Attributes = Standard();
 

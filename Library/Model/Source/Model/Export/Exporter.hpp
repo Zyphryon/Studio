@@ -81,13 +81,15 @@ namespace Studio::Model
         /// \return The animation bytes.
         static Blob ExportAnimation(ConstRef<Scene::Clip> Clip, ConstSpan<Scene::Joint> Joints, Sphere Extent);
 
-        /// \brief Serializes the manifest that ties the mesh, the skeleton and every material into one model.
+        /// \brief Serializes the manifest that ties the mesh, the skeleton, the materials and the clips into one model.
         ///
         /// \param Mesh      The mesh, relative to the manifest.
         /// \param Skeleton  The skeleton relative to the manifest, or empty for a model that never deforms.
         /// \param Materials The material table, in slot order.
+        /// \param Clips     The name of every clip, whose animation lies beside the mesh named after both.
+        /// \param Once      The names of the clips that play once and hold their last pose, every other clip looping.
         /// \return The manifest, as JSON text.
-        static Str ExportModel(Text Mesh, Text Skeleton, ConstSpan<Scene::Material> Materials);
+        static Str ExportModel(Text Mesh, Text Skeleton, ConstSpan<Scene::Material> Materials, ConstSpan<Str> Clips, ConstSpan<Str> Once);
 
     private:
 

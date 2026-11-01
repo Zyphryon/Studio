@@ -119,7 +119,8 @@ namespace Studio::Model
             return Bundle();
         }
 
-        Str Skeleton;
+        Str           Skeleton;
+        Sequence<Str> Clips;
 
         if (!Decoded.Joints.IsEmpty())
         {
@@ -138,6 +139,15 @@ namespace Studio::Model
                 Ref<Bundle::Motion> Motion = Result.Clips.Append();
                 Motion.Name = Sanitize(Clip.Name, "Clip");
                 Motion.Data = Exporter::ExportAnimation(Clip, Decoded.Joints, Sphere::Enclose(Extent));
+                Clips.Append(Motion.Name);
+            }
+
+            for (ConstRef<Str> Once : Profile.Once)
+            {
+                if (!Clips.Contains(Once))
+                {
+                    LOG_W("Model: '--once' names '{0}', which no clip of the scene is called", Once);
+                }
             }
 
             LOG_I("Model: {0} bones, {1} clips at {2} Hz, blended {3}",
@@ -149,7 +159,7 @@ namespace Studio::Model
 
         // The manifest names everything by file name alone, since the engine resolves it next to the manifest.
         Result.Manifest = Exporter::ExportModel(
-            Str::Print<"{0}.{1}">(Name, Exporter::kMeshOutput), Skeleton, Decoded.Materials);
+            Str::Print<"{0}.{1}">(Name, Exporter::kMeshOutput), Skeleton, Decoded.Materials, Clips, Profile.Once);
         return Result;
     }
 
