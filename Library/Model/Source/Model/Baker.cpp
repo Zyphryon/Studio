@@ -138,6 +138,12 @@ namespace Studio::Model
             {
                 Ref<Bundle::Motion> Motion = Result.Clips.Append();
                 Motion.Name = Sanitize(Clip.Name, "Clip");
+
+                // Takes the cleaning brings to one name would write over each other's file, so a later one is numbered.
+                if (Clips.Contains(Motion.Name))
+                {
+                    Motion.Name = Str::Print<"{0}_{1}">(Motion.Name, Clips.GetSize());
+                }
                 Motion.Data = Exporter::ExportAnimation(Clip, Decoded.Joints, Sphere::Enclose(Extent));
                 Clips.Append(Motion.Name);
             }
@@ -178,8 +184,9 @@ namespace Studio::Model
         }
 
         // Every file lands beside the manifest under its name, which is how the manifest refers to them.
-        const Text Stem  = StrBeforeLast(Destination, '.');
-        const SInt Slash = Max(StrFindLast(Stem, '/'), StrFindLast(Stem, '\\'));
+        const SInt Slash = Max(StrFindLast(Destination, '/'), StrFindLast(Destination, '\\'));
+        const SInt Dot   = StrFindLast(Destination, '.');
+        const Text Stem  = Dot > Slash ? Destination.Slice(0, static_cast<UInt>(Dot)) : Destination;
         const Text Name  = Stem.Slice(static_cast<UInt>(Slash + 1));
 
         const Bundle Output = Bake(Input, StrAfterLast(Source, '.'), Name, Profile);

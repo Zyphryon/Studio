@@ -36,7 +36,7 @@ namespace Studio::Model
             Sequence<Scene::Surface> Surfaces;
         };
 
-        /// \brief The attributes the reduction is asked to keep, the normal and the first texture coordinates.
+        /// \brief The floats per vertex the reduction weighs, three of the normal and two of the first UV set.
         static constexpr UInt kAttributes = 5;
 
     public:

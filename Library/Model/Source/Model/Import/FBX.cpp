@@ -120,6 +120,12 @@ namespace Studio::Model
             }
         }
 
+        // A scene with no materials still draws its faces, under one material that names nothing.
+        if (Result.Materials.IsEmpty())
+        {
+            Result.Materials.Append();
+        }
+
         UInt Widest = 3;
 
         for (UInt Index = 0; Index < Native.meshes.count; ++Index)
@@ -154,9 +160,20 @@ namespace Studio::Model
 
             for (UInt Face = 0; Face < Mesh.faces.count; ++Face)
             {
-                const UInt Owner = Result.Materials.IsEmpty() || Mesh.face_material.count <= Face
-                    ? 0
-                    : Mesh.face_material.data[Face];
+                // A face names a material of its own mesh, which its node may override, so the scene's slot is found there.
+                const UInt32            Local    = Face < Mesh.face_material.count ? Mesh.face_material.data[Face] : 0;
+                ConstPtr<ufbx_material> Material = nullptr;
+
+                if (Local < Node->materials.count)
+                {
+                    Material = Node->materials.data[Local];
+                }
+                else if (Local < Mesh.materials.count)
+                {
+                    Material = Mesh.materials.data[Local];
+                }
+
+                const UInt Owner = Material ? Material->typed_id : 0;
 
                 // A face past the materials that can be addressed has no primitive to draw it.
                 if (Owner >= Runs.GetSize())
@@ -208,11 +225,11 @@ namespace Studio::Model
     {
         Sequence<Scene::Joint> Joints;
         Sequence<ufbx_matrix>  Worlds;
+        Sequence<UInt64>       Taken;
 
         Lookup.Fill(-1, Native.nodes.count);
 
-        // Bones that carry weight, not every bone a cluster names, so controls and helpers stay out of the rig. Each is
-        // measured from where it was bound rather than where the scene parks it, since rigs are saved in control poses.
+        // Only bones that carry weight, each measured where it was bound since rigs are saved in control poses.
         Sequence<ConstPtr<ufbx_matrix>> Binding;
         Binding.Fill(nullptr, Native.nodes.count);
 
@@ -272,6 +289,13 @@ namespace Studio::Model
 
             Ref<Scene::Joint> Joint = Joints.Append();
             Joint.Name = Wrap(Node.name);
+
+            // A clip finds its bones by name, so a name another bone holds, or none at all, takes the bone's place too.
+            if (Joint.Name.IsEmpty() || Taken.Contains(Scene::Identify(Joint.Name)))
+            {
+                Joint.Name = Str::Print<"{0}_{1}">(Joint.Name, Joints.GetSize() - 1);
+            }
+            Taken.Append(Scene::Identify(Joint.Name));
 
             // The nearest ancestor that is itself a bone, which skips the helper nodes a rig hangs its bones off.
             for (ConstPtr<ufbx_node> Walk = Node.parent; Walk && Joint.Parent < 0; Walk = Walk->parent)

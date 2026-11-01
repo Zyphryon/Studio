@@ -64,7 +64,7 @@ namespace Studio::Model
         /// The samples per second every clip is resampled onto.
         Real32             Rate       = 30.0f;
 
-        /// The way the runtime reads between a clip's samples, Hermite storing the source's slope three times over.
+        /// The way the runtime reads between a clip's samples, Hermite tripling a clip to carry the source's slopes.
         Interpolation      Blend      = Interpolation::Linear;
 
         /// The names of the clips that play once and hold their last pose, every other clip looping.

@@ -85,7 +85,7 @@ namespace Studio::Model
 
         /// \brief Resolves one corner of a mesh into a vertex in the engine's axes.
         ///
-        /// \param Mesh       The mesh.
+        /// \param Mesh       The mesh the corner belongs to.
         /// \param Corner     The corner within the mesh.
         /// \param Geometry   The transform placing the mesh in the world.
         /// \param Rotation   The transform turning the mesh's directions into the world.
@@ -103,39 +103,39 @@ namespace Studio::Model
         /// \brief Records one texture slot of a material, its constant and its image each only when stated.
         ///
         /// \param Output Receives the slot.
-        /// \param Slot   The texture slot.
+        /// \param Slot   The slot the map is recorded into.
         /// \param Map    The map ufbx translated the source's shading model into.
         static void Attach(Ref<Scene::Material> Output, Scene::Slot Slot, ConstRef<ufbx_material_map> Map);
 
         /// \brief Turns a direction into the world and the engine's axes.
         ///
         /// \param Basis     The transform turning directions into the world.
-        /// \param Direction The direction.
+        /// \param Direction The direction to turn, in the mesh's own axes.
         /// \return The unit direction, or zero for one without length.
         static Vector3 Orient(ConstRef<ufbx_matrix> Basis, ConstRef<ufbx_vec3> Direction);
 
         /// \brief Carries a world transform into the engine's axes and the space the positions were baked in.
         ///
-        /// \param World The world transform.
+        /// \param World The transform from a node's space into the source's world.
         /// \param Scale The factor the positions were scaled by.
         /// \return The transform, mirrored across Z on both sides and scaled.
         static ufbx_matrix Place(ConstRef<ufbx_matrix> World, Real32 Scale);
 
         /// \brief Splits a transform into the position, scale and rotation a bone rests at.
         ///
-        /// \param Matrix The transform.
+        /// \param Matrix The transform to split, relative to the parent or to the world for a root bone.
         /// \param Joint  Receives the position, scale and rotation.
         static void Decompose(ConstRef<ufbx_matrix> Matrix, Ref<Scene::Joint> Joint);
 
         /// \brief Converts a ufbx matrix, whose columns are the engine's rows, into the engine's matrix.
         ///
-        /// \param Matrix The ufbx matrix.
+        /// \param Matrix The matrix to convert, in ufbx's column layout.
         /// \return The engine matrix.
         static Matrix4x3 Adopt(ConstRef<ufbx_matrix> Matrix);
 
         /// \brief Views a ufbx string as text.
         ///
-        /// \param Value The ufbx string.
+        /// \param Value The string to view, owned by the loaded scene.
         /// \return The text, valid while the scene lives.
         static Text Wrap(ConstRef<ufbx_string> Value);
     };

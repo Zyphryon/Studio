@@ -25,8 +25,7 @@ namespace Studio::Model
     Sequence<Simplifier::Level> Simplifier::Generate(
         Ref<ZyJob::Service> Scheduler, Ref<Scene> Source, ConstSpan<Profile::Detail> Details)
     {
-        // A UV seam opens the surface, so the attributes are weighted rather than their borders locked, the normal
-        // lower since shading forgives more drift than a texture does.
+        // Attributes are weighted rather than their seams locked, the normal lower since shading forgives more drift.
         static constexpr Array kWeights(0.2f, 0.2f, 0.2f, 0.6f, 0.6f);
 
         Sequence<Level> Result;

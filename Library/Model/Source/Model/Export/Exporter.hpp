@@ -75,7 +75,7 @@ namespace Studio::Model
 
         /// \brief Serializes a clip into a native animation, storing once every component that holds still.
         ///
-        /// \param Clip   The clip.
+        /// \param Clip   The clip to serialize, every motion sampled on its cadence.
         /// \param Joints The bones the clip drives, whose names key its lanes.
         /// \param Extent The local-space sphere every pose of the clip stays inside.
         /// \return The animation bytes.
@@ -121,7 +121,7 @@ namespace Studio::Model
 
         /// \brief Gets the kind of constant a texture slot is modulated by.
         ///
-        /// \param Slot The texture slot.
+        /// \param Slot The slot to classify.
         /// \return The kind, by what the slot means rather than how many components a scene wrote.
         static Constant Classify(Scene::Slot Slot);
     };

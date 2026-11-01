@@ -64,7 +64,7 @@ namespace Studio::Model
 
         /// \brief Packs the attributes requested that the scene carries, interleaving those that share a stream.
         ///
-        /// \param Source     The scene.
+        /// \param Source     The welded scene whose vertices are packed.
         /// \param Attributes The attributes to write and the streams they are grouped into.
         /// \return The packed scene, whose vertices are empty when no attribute survived.
         static Result Pack(ConstRef<Scene> Source, ConstSpan<Profile::Channel> Attributes);
@@ -73,8 +73,8 @@ namespace Studio::Model
 
         /// \brief Writes one vertex's element of one attribute.
         ///
-        /// \param Vertex The vertex.
-        /// \param Slot   The attribute.
+        /// \param Vertex The vertex the element is read from.
+        /// \param Slot   The semantic whose element is written.
         /// \param Target Receives the element.
         static void Write(ConstRef<Scene::Vertex> Vertex, ZyGraphic::VertexSlot Slot, Ptr<Byte> Target);
     };

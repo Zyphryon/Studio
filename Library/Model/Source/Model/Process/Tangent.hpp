@@ -35,7 +35,7 @@ namespace Studio::Model
 
         /// \brief Normalizes a direction, or falls back when it has no length.
         ///
-        /// \param Vector   The direction.
+        /// \param Vector   The direction to normalize.
         /// \param Fallback The direction taken when the vector has no length.
         /// \return The unit direction.
         static Vector3 Steady(ConstRef<Vector3> Vector, ConstRef<Vector3> Fallback);

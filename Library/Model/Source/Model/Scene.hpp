@@ -189,7 +189,7 @@ namespace Studio::Model
             /// The constant each slot is modulated by, a scalar one kept in the red channel.
             Array<Color, ZyEnum::Count<Slot>()> Factors;
 
-            /// The slots whose constant the source states, `true` for each one stated.
+            /// `true` for each slot whose constant the source states, `false` for one it leaves unstated.
             Array<Bool, ZyEnum::Count<Slot>()>  Declared = { };
         };
 
