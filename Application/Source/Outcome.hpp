@@ -19,6 +19,6 @@ namespace Studio::Application
     {
         Success = 0,    ///< Everything asked for was done.
         Failure = 1,    ///< The command was understood, and some of its work failed.
-        Misuse  = 2,    ///< The command itself was wrong: unknown, or missing what it needs.
+        Misuse  = 2,    ///< The command itself was wrong, unknown or missing what it needs.
     };
 }

@@ -17,6 +17,7 @@
 #include <Texture/Export/Picture.hpp>
 #include <Texture/Generate/Normal.hpp>
 #include <Texture/Generate/Relief.hpp>
+#include <Texture/Process/Encoder.hpp>
 #include <Zyphryon.Graphic/Metadata.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -165,9 +166,14 @@ namespace Studio::Application
 
         Sequence<Texture::Bitmap> Slices;
 
+        // A block format is drawn into its plain source, which the baker then encodes.
+        const ZyGraphic::TextureFormat Plain = Texture::Encoder::IsSupported(Output.Format)
+            ? Texture::Encoder::GetSource(Output.Format)
+            : Output.Format;
+
         for (ConstRef<Texture::Bitmap> Slice : Decoded.Slices)
         {
-            Texture::Bitmap Map = Draw(Texture::Canvas::From(Slice)).To(Output.Format);
+            Texture::Bitmap Map = Draw(Texture::Canvas::From(Slice)).To(Plain);
 
             if (Map.GetPixels().IsEmpty())
             {
@@ -229,7 +235,7 @@ namespace Studio::Application
             return Version(Parsed);
         }
 
-        // With no command Studio will open its GUI; until that exists, it prints the usage instead.
+        // With no command Studio prints the usage, until it has a GUI to open instead.
         if (Operands.IsEmpty() || Parsed.Contains("help"))
         {
             Usage::Print();
@@ -616,7 +622,7 @@ namespace Studio::Application
             }
         }
 
-        // A hand-edited tracker may overlap two regions; it still draws, with the later region on top.
+        // A hand-edited tracker may overlap two regions, and it still draws with the later region on top.
         for (UInt Index = 0; Index < Atlas.Regions.GetSize(); ++Index)
         {
             for (UInt Other = Index + 1; Other < Atlas.Regions.GetSize(); ++Other)
@@ -699,7 +705,7 @@ namespace Studio::Application
         {
             ConstRef<Texture::Bitmap> Slice = Decoded.Slices[Index];
 
-            // sRGB colour goes back out as sRGB; everything else, data included, is written as the values it holds.
+            // sRGB colour goes back out as sRGB, and everything else, data included, as the values it holds.
             const Bool sRGB = ZyGraphic::GetTextureMetadata(Slice.GetFormat()).IsSRGB;
 
             const Str Target = (Count > 1)

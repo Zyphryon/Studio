@@ -14,7 +14,7 @@
 
 namespace Studio::Application
 {
-    /// \brief Provides the text `help` prints: every command, and the switches each one reads.
+    /// \brief Provides the text `help` prints, with every command and the switches each one reads.
     class Usage final
     {
     public:
