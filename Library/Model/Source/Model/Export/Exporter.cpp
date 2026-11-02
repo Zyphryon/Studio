@@ -268,7 +268,7 @@ namespace Studio::Model
                     Sampler.SetString("AddressModeU", "Repeat");
                     Sampler.SetString("AddressModeV", "Repeat");
                     Sampler.SetString("AddressModeW", "Repeat");
-                    Sampler.SetString("Filter",       "Linear");
+                    Sampler.SetString("Filter",       "LinearMipLinear");
                 }
             }
 
