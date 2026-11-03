@@ -85,6 +85,20 @@ namespace Studio::Model
         /// \return The name with every space and character a path reserves made an underscore.
         static Str Sanitize(Text Value, Text Fallback);
 
+        /// \brief Measures how far each bone's skin reaches from it in the bind pose, over every vertex it moves.
+        ///
+        /// \param Decoded The scene whose vertices and bones are measured.
+        /// \return The distance of each bone's farthest vertex, in the bone's own space, zero for a bone moving none.
+        static Sequence<Real32> Measure(ConstRef<Scene> Decoded);
+
+        /// \brief Computes the sphere every pose of a clip stays within, each posed bone grown by its skin's reach.
+        ///
+        /// \param Clip    The clip whose samples are posed.
+        /// \param Joints  The bones with parents first, whose resting pose fills any bone the clip leaves still.
+        /// \param Reaches The distance each bone's skin reaches, as \ref Measure gives it.
+        /// \return The sphere around every posed bone grown by its reach, which no skinned vertex leaves.
+        static Sphere Enclose(ConstRef<Scene::Clip> Clip, ConstSpan<Scene::Joint> Joints, ConstSpan<Real32> Reaches);
+
     private:
 
         // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

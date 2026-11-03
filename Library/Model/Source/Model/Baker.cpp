@@ -133,7 +133,9 @@ namespace Studio::Model
 
             Skeleton = Str::Print<"{0}.{1}">(Name, Exporter::kSkeletonOutput);
 
-            // A clip is bounded by the sphere around the resting mesh, which holds while no bone swings outside it.
+            // A clip is bounded by every pose it takes, so a limb swung past the resting mesh is never culled early.
+            const Sequence<Real32> Reaches = Measure(Decoded);
+
             for (ConstRef<Scene::Clip> Clip : Decoded.Clips)
             {
                 Ref<Bundle::Motion> Motion = Result.Clips.Append();
@@ -144,7 +146,7 @@ namespace Studio::Model
                 {
                     Motion.Name = Str::Print<"{0}_{1}">(Motion.Name, Clips.GetSize());
                 }
-                Motion.Data = Exporter::ExportAnimation(Clip, Decoded.Joints, Sphere::Enclose(Extent));
+                Motion.Data = Exporter::ExportAnimation(Clip, Decoded.Joints, Enclose(Clip, Decoded.Joints, Reaches));
                 Clips.Append(Motion.Name);
             }
 
@@ -251,5 +253,107 @@ namespace Studio::Model
             Result.Append(Letter == ' ' || StrFind(Text("/\\:|<>\"?*"), Letter) >= 0 ? '_' : Letter);
         }
         return Result.IsEmpty() ? Str(Fallback) : Result;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Sequence<Real32> Baker::Measure(ConstRef<Scene> Decoded)
+    {
+        Sequence<Real32> Reaches;
+        Reaches.Fill(0.0f, Decoded.Joints.GetSize());
+
+        // Every bone a vertex leans on is grown to it, so a vertex blended between bones lies within all of them.
+        for (ConstRef<Scene::Vertex> Vertex : Decoded.Vertices)
+        {
+            for (UInt Influence = 0; Influence < Scene::kInfluences; ++Influence)
+            {
+                if (Vertex.Weights[Influence] < Scene::kMinWeight)
+                {
+                    continue;
+                }
+
+                const UInt16 Joint = Vertex.Joints[Influence];
+                const Real32 Reach = Matrix4x3::Project(Decoded.Joints[Joint].Inverse, Vertex.Position).GetLength();
+
+                Reaches[Joint] = Max(Reaches[Joint], Reach);
+            }
+        }
+        return Reaches;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Sphere Baker::Enclose(ConstRef<Scene::Clip> Clip, ConstSpan<Scene::Joint> Joints, ConstSpan<Real32> Reaches)
+    {
+        const UInt Ticks = Clip.Motions.IsEmpty() ? 1 : Clip.Motions[0].Position.GetSize();
+
+        Sequence<Matrix4x3> Locals;
+        Sequence<Matrix4x3> Worlds;
+        Sequence<Sphere>    Grown;
+
+        Worlds.Fill(Matrix4x3::Identity(), Joints.GetSize());
+
+        for (UInt Tick = 0; Tick < Ticks; ++Tick)
+        {
+            // A bone the clip leaves still holds its resting pose, and a driven one takes the tick's sample.
+            Locals.Clear();
+
+            for (ConstRef<Scene::Joint> Joint : Joints)
+            {
+                Locals.Append(Matrix4x3::FromTransform(Joint.Position, Joint.Scale, Joint.Rotation));
+            }
+
+            for (ConstRef<Scene::Motion> Motion : Clip.Motions)
+            {
+                if (Tick < Motion.Position.GetSize())
+                {
+                    Locals[Motion.Joint] = Matrix4x3::FromTransform(
+                        Motion.Position[Tick], Motion.Scale[Tick], Motion.Rotation[Tick]);
+                }
+            }
+
+            // Composed parents first, as the engine's skeleton does, so each bone stands where it is drawn.
+            for (UInt Index = 0; Index < Joints.GetSize(); ++Index)
+            {
+                const SInt16 Parent = Joints[Index].Parent;
+
+                Worlds[Index] = (Parent < 0 ? Locals[Index] : Worlds[Parent] * Locals[Index]);
+
+                if (Reaches[Index] > 0.0f)
+                {
+                    const Vector3 Scale = Worlds[Index].GetScale();
+                    const Real32  Most  = Max(Scale.GetX(), Scale.GetY(), Scale.GetZ());
+
+                    Grown.Append(Sphere(Worlds[Index].GetTranslation(), Reaches[Index] * Most));
+                }
+            }
+        }
+
+        if (Grown.IsEmpty())
+        {
+            return Sphere(Vector3::Zero(), 0.0f);
+        }
+
+        // Centred on the box around every grown bone, and wide enough to hold the farthest of them whole.
+        Vector3 Lower = Grown[0].GetCenter();
+        Vector3 Upper = Grown[0].GetCenter();
+
+        for (ConstRef<Sphere> Bone : Grown)
+        {
+            Lower = Vector3::Min(Lower, Bone.GetCenter() - Vector3(Bone.GetRadius()));
+            Upper = Vector3::Max(Upper, Bone.GetCenter() + Vector3(Bone.GetRadius()));
+        }
+
+        const Vector3 Center = (Lower + Upper) * 0.5f;
+
+        Real32 Radius = 0.0f;
+
+        for (ConstRef<Sphere> Bone : Grown)
+        {
+            Radius = Max(Radius, Center.GetDistance(Bone.GetCenter()) + Bone.GetRadius());
+        }
+        return Sphere(Center, Radius);
     }
 }
