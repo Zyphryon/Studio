@@ -65,6 +65,12 @@ namespace Studio::Model
             }
         }
 
+        // A scene with no rig is one rigid piece, held by a root at rest that every vertex follows whole.
+        if (Result.Joints.IsEmpty())
+        {
+            Result.Joints.Append().Name = "Root";
+        }
+
         // An attribute is read only when it is asked for and at least one mesh carries it.
         Result.Attributes = Scene::Attribute::Position;
 
