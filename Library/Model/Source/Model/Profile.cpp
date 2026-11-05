@@ -52,10 +52,10 @@ namespace Studio::Model
     {
         // Triangles follow area and area the square of the coverage, so a quarter of them per halving keeps pace.
         Sequence<Detail> Result;
-        Result.Append(1.00f,  0.25f, 0.02f);
-        Result.Append(0.25f,  0.12f, 0.03f);
-        Result.Append(0.06f,  0.05f, 0.05f);
-        Result.Append(0.015f, 0.00f, 0.10f);
+        Result.Append(1.00f,  0.03f,   0.02f);
+        Result.Append(0.25f,  0.015f,  0.03f);
+        Result.Append(0.06f,  0.0075f, 0.05f);
+        Result.Append(0.015f, 0.00f,   0.10f);
         return Result;
     }
 
