@@ -66,9 +66,9 @@ namespace Studio::Model
         // A level that gained nothing draws the run above it again, so each run is ordered once.
         Table<UInt32, Bool> Ordered;
 
-        for (ConstRef<Simplifier::Level> Level : Levels)
+        const auto Order = [&](ConstSpan<Scene::Surface> Runs)
         {
-            for (ConstRef<Scene::Surface> Surface : Level.Surfaces)
+            for (ConstRef<Scene::Surface> Surface : Runs)
             {
                 if (Ordered.Contains(Surface.Offset))
                 {
@@ -80,6 +80,12 @@ namespace Studio::Model
                 const Ptr<UInt32> Run = Source.Indices.GetData() + Surface.Offset;
                 meshopt_optimizeVertexCache(Run, Run, Surface.Count, Count);
             }
+        };
+
+        for (ConstRef<Simplifier::Level> Level : Levels)
+        {
+            Order(Level.Surfaces);
+            Order(Level.Casters);
         }
 
         meshopt_optimizeVertexFetch(

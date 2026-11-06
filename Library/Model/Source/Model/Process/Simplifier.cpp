@@ -70,57 +70,81 @@ namespace Studio::Model
             Target[4] = Vertex.TexCoord0.GetY();
         }
 
+        const UInt Levels = Details.GetSize() - 1;
+
         // One entry per surface per coarser level, so a reduction's place follows from its index, not its finish.
-        const UInt                 Levels = Details.GetSize() - 1;
-        Sequence<Sequence<UInt32>> Reductions;
-        Reductions.Resize(Levels * Surfaces.GetSize());
-
-        // Every reduction reads the same arrays and writes only its own entry, and nothing grows the indices meanwhile.
-        const UInt32 Total = static_cast<UInt32>(Reductions.GetSize());
-
-        Scheduler.Parallel(ZyJob::Lane::Compute, Total, [&](UInt32 Start, UInt32 End)
+        const auto Reduce = [&](UInt32 Options)
         {
-            Sequence<UInt32> Scratch;
+            Sequence<Sequence<UInt32>> Reductions;
+            Reductions.Resize(Levels * Surfaces.GetSize());
 
-            for (UInt32 Slot = Start; Slot < End; ++Slot)
+            // Every reduction reads the same arrays and writes only its own entry, and nothing grows the indices.
+            const UInt32 Total = static_cast<UInt32>(Reductions.GetSize());
+
+            Scheduler.Parallel(ZyJob::Lane::Compute, Total, [&](UInt32 Start, UInt32 End)
             {
-                ConstRef<Profile::Detail> Setting = Details[Slot / Surfaces.GetSize() + 1];
-                ConstRef<Scene::Surface>  Surface = Surfaces[Slot % Surfaces.GetSize()];
+                Sequence<UInt32> Scratch;
 
-                // Rounded down to a whole triangle and never below one.
-                const UInt Target = Max<UInt>(3, static_cast<UInt>(Surface.Count * Setting.Ratio) / 3 * 3);
-
-                if (Target >= Surface.Count)
+                for (UInt32 Slot = Start; Slot < End; ++Slot)
                 {
-                    continue;
+                    ConstRef<Profile::Detail> Setting = Details[Slot / Surfaces.GetSize() + 1];
+                    ConstRef<Scene::Surface>  Surface = Surfaces[Slot % Surfaces.GetSize()];
+
+                    // Rounded down to a whole triangle and never below one.
+                    const UInt Target = Max<UInt>(3, static_cast<UInt>(Surface.Count * Setting.Ratio) / 3 * 3);
+
+                    if (Target >= Surface.Count)
+                    {
+                        continue;
+                    }
+
+                    Scratch.Resize(Surface.Count);
+
+                    const UInt Count = meshopt_simplifyWithAttributes(
+                        Scratch.GetData(),
+                        Source.Indices.GetData() + Surface.Offset,
+                        Surface.Count,
+                        Positions.GetData(),
+                        Vertices.GetSize(),
+                        3 * sizeof(Real32),
+                        Attributes.GetData(),
+                        kAttributes * sizeof(Real32),
+                        kWeights.GetData(),
+                        kAttributes,
+                        nullptr,
+                        Target,
+                        Setting.Error,
+                        Options,
+                        nullptr);
+
+                    if (Count > 0 && Count < Surface.Count)
+                    {
+                        Reductions[Slot].Append(ConstSpan(Scratch.GetData(), Count));
+                    }
                 }
+            });
+            return Reductions;
+        };
 
-                Scratch.Resize(Surface.Count);
+        const Sequence<Sequence<UInt32>> Drawn = Reduce(meshopt_SimplifySparse);
+        const Sequence<Sequence<UInt32>> Cast  = Reduce(meshopt_SimplifySparse | meshopt_SimplifyPermissive);
 
-                // Sparse, since a run reaches only its own material's vertices while the arrays span the whole mesh.
-                const UInt Count = meshopt_simplifyWithAttributes(
-                    Scratch.GetData(),
-                    Source.Indices.GetData() + Surface.Offset,
-                    Surface.Count,
-                    Positions.GetData(),
-                    Vertices.GetSize(),
-                    3 * sizeof(Real32),
-                    Attributes.GetData(),
-                    kAttributes * sizeof(Real32),
-                    kWeights.GetData(),
-                    kAttributes,
-                    nullptr,
-                    Target,
-                    Setting.Error,
-                    meshopt_SimplifySparse,
-                    nullptr);
-
-                if (Count > 0 && Count < Surface.Count)
-                {
-                    Reductions[Slot].Append(ConstSpan(Scratch.GetData(), Count));
-                }
+        // Nothing gained leaves the run it was asked to reduce, rather than a copy of it.
+        const auto Place = [&](ConstRef<Sequence<UInt32>> Produced, ConstRef<Scene::Surface> Fallback)
+        {
+            if (Produced.IsEmpty())
+            {
+                return Fallback;
             }
-        });
+
+            Scene::Surface Reduced;
+            Reduced.Offset   = static_cast<UInt32>(Source.Indices.GetSize());
+            Reduced.Count    = static_cast<UInt32>(Produced.GetSize());
+            Reduced.Material = Fallback.Material;
+
+            Source.Indices.Append(Produced);
+            return Reduced;
+        };
 
         // Gathered back in level order, then surface order, as they would have landed one after another.
         for (UInt Step = 0; Step < Levels; ++Step)
@@ -130,21 +154,11 @@ namespace Studio::Model
 
             for (UInt Index = 0; Index < Surfaces.GetSize(); ++Index)
             {
-                ConstRef<Sequence<UInt32>> Produced = Reductions[Step * Surfaces.GetSize() + Index];
+                const UInt Slot = Step * Surfaces.GetSize() + Index;
 
-                // Nothing gained, so the level draws the run it was asked to reduce rather than a copy of it.
-                if (Produced.IsEmpty())
-                {
-                    Entry.Surfaces.Append(Surfaces[Index]);
-                    continue;
-                }
-
-                Ref<Scene::Surface> Reduced = Entry.Surfaces.Append();
-                Reduced.Offset   = static_cast<UInt32>(Source.Indices.GetSize());
-                Reduced.Count    = static_cast<UInt32>(Produced.GetSize());
-                Reduced.Material = Surfaces[Index].Material;
-
-                Source.Indices.Append(Produced);
+                // A surface its casters could not shrink casts as the level draws it.
+                ConstRef<Scene::Surface> Own = Entry.Surfaces.Append(Place(Drawn[Slot], Surfaces[Index]));
+                Entry.Casters.Append(Place(Cast[Slot], Own));
             }
         }
         return Result;

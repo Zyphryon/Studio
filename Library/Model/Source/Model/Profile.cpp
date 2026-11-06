@@ -206,6 +206,20 @@ namespace Studio::Model
         {
             Result.Details.RemoveLast();
         }
+
+        // An asset may name where its own levels take over, finest first, in place of the stock thresholds.
+        UInt Level = 0;
+
+        StrSplit(Environment.GetText("coverage", Text::Empty()), ',', [&Result, &Level](Text Value)
+        {
+            UInt Cursor = 0;
+
+            if (const Text Entry = StrTrim(Value); !Entry.IsEmpty() && Level < Result.Details.GetSize())
+            {
+                Result.Details[Level++].Coverage = StrExtractNumber<Real32>(Entry, Cursor);
+            }
+        });
+
         Result.Details[Reduced].Coverage = 0.0f;
 
         Output = Move(Result);

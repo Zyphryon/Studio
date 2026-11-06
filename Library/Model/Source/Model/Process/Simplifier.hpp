@@ -34,6 +34,9 @@ namespace Studio::Model
 
             /// The runs the level draws, one per material, indexing the scene's vertices.
             Sequence<Scene::Surface> Surfaces;
+
+            /// The runs shadow maps draw in the level's place, reduced across seams, or empty to draw its own.
+            Sequence<Scene::Surface> Casters;
         };
 
         /// \brief The floats per vertex the reduction weighs, three of the normal and two of the first UV set.
@@ -44,7 +47,7 @@ namespace Studio::Model
         /// \brief Generates every level for a scene, appending the reduced runs to its index buffer.
         ///
         /// \param Scheduler The pool the reductions are spread over.
-        /// \param Source    The scene, whose indices grow by one run per surface per level past the first.
+        /// \param Source    The scene, whose indices grow by the reduced runs of every level past the first.
         /// \param Details   The reduction and coverage of every level, coarsest last.
         /// \return The levels, the first being the scene's own geometry, or empty for a scene without surfaces.
         static Sequence<Level> Generate(

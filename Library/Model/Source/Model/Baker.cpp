@@ -96,17 +96,24 @@ namespace Studio::Model
         for (UInt Index = 0; Index < Levels.GetSize(); ++Index)
         {
             UInt Count = 0;
+            UInt Cast  = 0;
 
             for (ConstRef<Scene::Surface> Surface : Levels[Index].Surfaces)
             {
                 Count += Surface.Count / 3;
             }
 
-            LOG_I("Model:     level {0} keeps {1} triangles ({2}%) above {3}% coverage",
+            for (ConstRef<Scene::Surface> Surface : Levels[Index].Casters)
+            {
+                Cast += Surface.Count / 3;
+            }
+
+            LOG_I("Model:     level {0} keeps {1} triangles ({2}%) above {3}% coverage, and casts {4}",
                 Index,
                 Count,
                 Count * 100 / Triangles,
-                static_cast<UInt>(Levels[Index].Coverage * 100.0f));
+                static_cast<UInt>(Levels[Index].Coverage * 100.0f),
+                Cast > 0 ? Cast : Count);
         }
 
         const Box Extent = Decoded.GetBounds();

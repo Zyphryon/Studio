@@ -79,7 +79,7 @@ namespace Studio::Model
 
         for (ConstRef<Simplifier::Level> Level : Levels)
         {
-            Primitives += Level.Surfaces.GetSize();
+            Primitives += Level.Surfaces.GetSize() + Level.Casters.GetSize();
         }
 
         if (Geometry.Bindings.GetSize() > 0xFF || Primitives > 0xFFFF || Levels.GetSize() > ZyGraphic::Mesh::kMaxDetail)
@@ -115,12 +115,12 @@ namespace Studio::Model
                 Body.Write<Real32>(Level.Coverage);
             }
 
-            // One flat run grouped by level, which is how the loader learns where each level begins.
+            // One flat run grouped by level, its own runs then its casters, which is how the loader splits them.
             Body.Write<UInt16>(static_cast<UInt16>(Primitives));
 
-            for (UInt Index = 0; Index < Levels.GetSize(); ++Index)
+            const auto Emit = [&Body](ConstSpan<Scene::Surface> Runs, UInt8 Level, Bool Caster)
             {
-                for (ConstRef<Scene::Surface> Entry : Levels[Index].Surfaces)
+                for (ConstRef<Scene::Surface> Entry : Runs)
                 {
                     ZyGraphic::Mesh::Primitive Primitive;
                     Zero(AddressOf(Primitive), 1);
@@ -130,9 +130,16 @@ namespace Studio::Model
                     Primitive.Range.Offset    = Entry.Offset;
                     Primitive.Range.Instances = 1;
                     Primitive.Material        = Entry.Material;
-                    Primitive.Level           = static_cast<UInt8>(Index);
+                    Primitive.Level           = Level;
+                    Primitive.Caster          = Caster;
                     Body.Write(Primitive);
                 }
+            };
+
+            for (UInt Index = 0; Index < Levels.GetSize(); ++Index)
+            {
+                Emit(Levels[Index].Surfaces, static_cast<UInt8>(Index), false);
+                Emit(Levels[Index].Casters,  static_cast<UInt8>(Index), true);
             }
         });
 
