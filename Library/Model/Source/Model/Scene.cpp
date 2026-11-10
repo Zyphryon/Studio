@@ -57,7 +57,7 @@ namespace Studio::Model
         const Text Name  = Path.Slice(static_cast<UInt>(Slash + 1));
         const SInt Dot   = StrFindLast(Name, '.');
 
-        return Str::Print<"{0}.{1}">(Dot > 0 ? Name.Slice(0, static_cast<UInt>(Dot)) : Name, kTexture);
+        return Str::Print("{0}.{1}", Dot > 0 ? Name.Slice(0, static_cast<UInt>(Dot)) : Name, kTexture);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

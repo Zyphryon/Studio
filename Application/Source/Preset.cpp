@@ -58,7 +58,7 @@ namespace Studio::Application
                 }
                 else if (Value.Second.IsNumber())
                 {
-                    Word.Append(Str::Print<"{0}">(Value.Second.GetNumber<Real64>()));
+                    Word.Append(Str::Print("{0}", Value.Second.GetNumber<Real64>()));
                 }
                 else
                 {

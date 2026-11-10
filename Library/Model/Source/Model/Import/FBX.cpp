@@ -299,7 +299,7 @@ namespace Studio::Model
             // A clip finds its bones by name, so a name another bone holds, or none at all, takes the bone's place too.
             if (Joint.Name.IsEmpty() || Taken.Contains(Scene::Identify(Joint.Name)))
             {
-                Joint.Name = Str::Print<"{0}_{1}">(Joint.Name, Joints.GetSize() - 1);
+                Joint.Name = Str::Print("{0}_{1}", Joint.Name, Joints.GetSize() - 1);
             }
             Taken.Append(Scene::Identify(Joint.Name));
 

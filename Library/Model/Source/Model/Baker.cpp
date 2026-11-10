@@ -138,7 +138,7 @@ namespace Studio::Model
                 return Bundle();
             }
 
-            Skeleton = Str::Print<"{0}.{1}">(Name, Exporter::kSkeletonOutput);
+            Skeleton = Str::Print("{0}.{1}", Name, Exporter::kSkeletonOutput);
 
             // A clip is bounded by every pose it takes, so a limb swung past the resting mesh is never culled early.
             const Sequence<Real32> Reaches = Measure(Decoded);
@@ -151,7 +151,7 @@ namespace Studio::Model
                 // Takes the cleaning brings to one name would write over each other's file, so a later one is numbered.
                 if (Clips.Contains(Motion.Name))
                 {
-                    Motion.Name = Str::Print<"{0}_{1}">(Motion.Name, Clips.GetSize());
+                    Motion.Name = Str::Print("{0}_{1}", Motion.Name, Clips.GetSize());
                 }
                 Motion.Data = Exporter::ExportAnimation(Clip, Decoded.Joints, Enclose(Clip, Decoded.Joints, Reaches));
                 Clips.Append(Motion.Name);
@@ -174,7 +174,7 @@ namespace Studio::Model
 
         // The manifest names everything by file name alone, since the engine resolves it next to the manifest.
         Result.Manifest = Exporter::ExportModel(
-            Str::Print<"{0}.{1}">(Name, Exporter::kMeshOutput), Skeleton, Decoded.Materials, Clips, Profile.Once);
+            Str::Print("{0}.{1}", Name, Exporter::kMeshOutput), Skeleton, Decoded.Materials, Clips, Profile.Once);
         return Result;
     }
 
@@ -220,12 +220,12 @@ namespace Studio::Model
             return true;
         };
 
-        if (!Store(Str::Print<"{0}.{1}">(Stem, Exporter::kMeshOutput), Output.Mesh))
+        if (!Store(Str::Print("{0}.{1}", Stem, Exporter::kMeshOutput), Output.Mesh))
         {
             return false;
         }
 
-        const Str Skeleton = Str::Print<"{0}.{1}">(Stem, Exporter::kSkeletonOutput);
+        const Str Skeleton = Str::Print("{0}.{1}", Stem, Exporter::kSkeletonOutput);
 
         if (Output.Skeleton != nullptr && !Store(Skeleton, Output.Skeleton))
         {
@@ -235,7 +235,7 @@ namespace Studio::Model
         // Named after the clip as well as the model, so several clips do not write over one another.
         for (ConstRef<Bundle::Motion> Clip : Output.Clips)
         {
-            if (!Store(Str::Print<"{0}.{1}.{2}">(Stem, Clip.Name, Exporter::kAnimationOutput), Clip.Data))
+            if (!Store(Str::Print("{0}.{1}.{2}", Stem, Clip.Name, Exporter::kAnimationOutput), Clip.Data))
             {
                 return false;
             }

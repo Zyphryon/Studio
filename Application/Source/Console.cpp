@@ -518,7 +518,7 @@ namespace Studio::Application
             for (UInt16 Layer = 0; Layer < Layers; ++Layer)
             {
                 const Str Name = (Layers > 1)
-                    ? Str::Print<"{0}_{1:03}">(Path::GetStem(Source), Layer)
+                    ? Str::Print("{0}_{1:03}", Path::GetStem(Source), Layer)
                     : Str(Path::GetStem(Source));
 
                 // A consumer looks a region up by its name, so no two regions may share one.
@@ -709,7 +709,7 @@ namespace Studio::Application
             const Bool sRGB = ZyGraphic::GetTextureMetadata(Slice.GetFormat()).IsSRGB;
 
             const Str Target = (Count > 1)
-                ? Path::Derive(Destination, Str::Print<"_{0}">(Index), Texture::Picture::kOutput)
+                ? Path::Derive(Destination, Str::Print("_{0}", Index), Texture::Picture::kOutput)
                 : Str(Destination);
 
             if (!Texture::Picture::Write(Target, Texture::Canvas::From(Slice), sRGB))

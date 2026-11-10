@@ -327,7 +327,7 @@ namespace Studio::Model
             {
                 JsonObject Entry = List.AddObject();
                 Entry.SetString("Name", Clip);
-                Entry.SetString("Path", Str::Print<"{0}.{1}.{2}">(Stem, Clip, kAnimationOutput));
+                Entry.SetString("Path", Str::Print("{0}.{1}.{2}", Stem, Clip, kAnimationOutput));
                 Entry.SetEnum("Repeat", Once.Contains(Clip) ? Repeat::Once : Repeat::Loop);
             }
         }
