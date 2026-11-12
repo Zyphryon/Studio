@@ -81,7 +81,7 @@ namespace Studio::Model
             Mark(Mesh.vertex_normal.exists, ZyGraphic::VertexSlot::Normal,    Scene::Attribute::Normal);
             Mark(Mesh.vertex_uv.exists,     ZyGraphic::VertexSlot::TexCoord0, Scene::Attribute::TexCoord0);
             Mark(Mesh.uv_sets.count > 1,    ZyGraphic::VertexSlot::TexCoord1, Scene::Attribute::TexCoord1);
-            Mark(Mesh.vertex_color.exists,  ZyGraphic::VertexSlot::Color0,    Scene::Attribute::Color);
+            Mark(true,                      ZyGraphic::VertexSlot::Color0,    Scene::Attribute::Color);
             Mark(Tangents,                  ZyGraphic::VertexSlot::Tangent,   Scene::Attribute::Tangent);
         }
 

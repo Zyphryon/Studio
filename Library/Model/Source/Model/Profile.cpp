@@ -40,6 +40,7 @@ namespace Studio::Model
         Result.Append(ZyGraphic::VertexSlot::Normal,       0);
         Result.Append(ZyGraphic::VertexSlot::Tangent,      0);
         Result.Append(ZyGraphic::VertexSlot::TexCoord0,    0);
+        Result.Append(ZyGraphic::VertexSlot::Color0,       0);
         Result.Append(ZyGraphic::VertexSlot::BlendIndices, 0);
         Result.Append(ZyGraphic::VertexSlot::BlendWeights, 0);
         return Result;
