@@ -104,7 +104,7 @@ namespace Studio::Model
         if (Output.Extended)
         {
             Output.Indices = Blob::Allocate<UInt32>(Source.Indices.GetSize());
-            Output.Indices.Copy<UInt32>(Source.Indices.GetData(), Source.Indices.GetSize());
+            Output.Indices.Copy<UInt32>(Source.Indices.GetData(), Source.Indices.GetSize() * sizeof(UInt32));
         }
         else
         {
