@@ -161,6 +161,9 @@ namespace Studio::Texture
         Result.Padding  = Root.GetNumber<UInt16>("Padding", 0);
         Result.Extrude  = Root.GetNumber<UInt16>("Extrude", 0);
         Result.Headroom = Root.GetNumber<UInt16>("Headroom", 1);
+        Result.Mipmaps  = Root.GetBool("Mipmaps",  Result.Mipmaps);
+        Result.Linear   = Root.GetBool("Linear",   Result.Linear);
+        Result.Compress = Root.GetBool("Compress", Result.Compress);
 
         if (const JsonArray Fill = Root.GetArray("Fill"); !Fill.IsNullOrEmpty() && Fill.GetSize() == 4)
         {
@@ -249,6 +252,9 @@ namespace Studio::Texture
         Root.SetNumber<UInt16>("Slices",  Slices);
         Root.SetNumber<UInt16>("Padding", Padding);
         Root.SetNumber<UInt16>("Extrude", Extrude);
+        Root.SetBool("Mipmaps",  Mipmaps);
+        Root.SetBool("Linear",   Linear);
+        Root.SetBool("Compress", Compress);
 
         // Fields left at their defaults are not written, so older trackers read back unchanged.
         if (Headroom > 1)

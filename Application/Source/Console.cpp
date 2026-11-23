@@ -99,6 +99,32 @@ namespace Studio::Application
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+    template<typename Type>
+    static Bool ReadChoice(ConstRef<Environment> Parsed, Text Name)
+    {
+        // A name that is not one of the choices reads as the default, so it is refused here instead.
+        Type Value;
+
+        if (!Parsed.Contains(Name) || ZyEnum::Find(Parsed.GetText(Name, Text::Empty()), Value))
+        {
+            return true;
+        }
+        LOG_E("Studio: '{0}' is not a choice '--{1}' takes", Parsed.GetText(Name, Text::Empty()), Name);
+
+        return false;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Bool ReadLayout(ConstRef<Environment> Parsed)
+    {
+        return ReadChoice<Texture::Packer::Mode>(Parsed, "mode") && ReadChoice<Texture::Packer::Fitting>(Parsed, "fit");
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
     template<typename Callable>
     static Outcome Generate(
         ConstRef<Texture::Baker> Instance,
@@ -239,7 +265,7 @@ namespace Studio::Application
         if (Operands.IsEmpty() || Parsed.Contains("help"))
         {
             Usage::Print();
-            return Operands.IsEmpty() ? Outcome::Misuse : Outcome::Success;
+            return Parsed.Contains("help") ? Outcome::Success : Outcome::Misuse;
         }
 
         const ConstPtr<Entry> Found = Find(Operands[0]);
@@ -461,7 +487,7 @@ namespace Studio::Application
 
         Texture::Profile Settings;
 
-        if (!ReadProfile(Parsed, Settings))
+        if (!ReadProfile(Parsed, Settings) || !ReadLayout(Parsed))
         {
             return Outcome::Misuse;
         }
@@ -470,7 +496,11 @@ namespace Studio::Application
         const Str  Derived = Path::Derive(Output, Text::Empty(), Texture::Exporter::kOutput);
         const Text Image   = Parsed.GetText("texture", Derived);
 
+        // The texture's settings are kept with the tracker, so a later build writes it the same way.
         Texture::Tracker Atlas;
+        Atlas.Mipmaps  = Settings.Mipmaps;
+        Atlas.Linear   = Settings.Linear;
+        Atlas.Compress = Settings.Compress;
 
         if (!Texture::Tracker::Relate(Folder, Image, Atlas.Texture))
         {
@@ -562,7 +592,7 @@ namespace Studio::Application
 
         Texture::Profile Settings;
 
-        if (!ReadProfile(Parsed, Settings))
+        if (!ReadProfile(Parsed, Settings) || !ReadLayout(Parsed))
         {
             return Outcome::Misuse;
         }
@@ -582,6 +612,14 @@ namespace Studio::Application
         {
             Atlas.Format = Settings.Format;
         }
+
+        // So does any of the texture's settings, which otherwise carry over from the tracker.
+        Atlas.Mipmaps     = Parsed.Contains("mipmaps")    ? Settings.Mipmaps  : Atlas.Mipmaps;
+        Atlas.Linear      = Parsed.Contains("linear")     ? Settings.Linear   : Atlas.Linear;
+        Atlas.Compress    = Parsed.Contains("compressed") ? Settings.Compress : Atlas.Compress;
+        Settings.Mipmaps  = Atlas.Mipmaps;
+        Settings.Linear   = Atlas.Linear;
+        Settings.Compress = Atlas.Compress;
 
         if (!ReadTracker(Parsed, Atlas))
         {
@@ -646,6 +684,11 @@ namespace Studio::Application
 
     Outcome Console::Normal(ConstRef<Environment> Parsed) const
     {
+        if (!ReadChoice<Texture::Normal::Kernel>(Parsed, "filter") || !ReadChoice<Texture::Channel>(Parsed, "channel"))
+        {
+            return Outcome::Misuse;
+        }
+
         const Texture::Normal::Settings Knobs = Texture::Normal::Settings::From(Parsed);
 
         return Generate(mTextures, Parsed, "_normal", [&](ConstRef<Texture::Canvas> Source)
@@ -659,6 +702,11 @@ namespace Studio::Application
 
     Outcome Console::Relief(ConstRef<Environment> Parsed) const
     {
+        if (!ReadChoice<Texture::Relief::Shape>(Parsed, "shape") || !ReadChoice<Texture::Channel>(Parsed, "channel"))
+        {
+            return Outcome::Misuse;
+        }
+
         const Texture::Relief::Settings Knobs = Texture::Relief::Settings::From(Parsed);
 
         return Generate(mTextures, Parsed, "_relief", [&](ConstRef<Texture::Canvas> Source)

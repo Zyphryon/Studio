@@ -200,6 +200,8 @@ namespace Studio::Model
 
         if (Reduced >= Result.Details.GetSize())
         {
+            LOG_E("Model: '--lod' goes from 0 to {0}, which {1} is not", Result.Details.GetSize() - 1, Reduced);
+
             return false;
         }
 

@@ -134,6 +134,15 @@ namespace Studio::Texture
         /// The format the texture is written in, or `Unspecified` to take the first source's.
         ZyGraphic::TextureFormat Format   = ZyGraphic::TextureFormat::Unspecified;
 
+        /// `true` to generate a full mip chain down to 1x1, `false` to write the base level alone.
+        Bool                     Mipmaps  = false;
+
+        /// `true` if the sources hold linear values, `false` for colour art authored in sRGB.
+        Bool                     Linear   = true;
+
+        /// `true` to LZ4-compress the payload when it comes out smaller, `false` to store it raw.
+        Bool                     Compress = true;
+
         /// The width of every slice, in pixels.
         UInt16                   Width    = 0;
 

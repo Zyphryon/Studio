@@ -2,9 +2,9 @@
 *Every asset the engine loads, baked by one tool.*
 
 **Studio** is the offline side of the [Zyphryon Engine](https://github.com/Zyphryon/Engine): one executable that
-turns images, typefaces and sounds into the `.tex`, `.fnt` and `.snd` files the engine reads, and packs sprites into
-atlases and texture arrays described by a plain JSON tracker. Its bakers are also static libraries, so an editor
-can bake, pack and preview without shelling out.
+turns images, models, typefaces and sounds into the `.tex`, `.mdl`, `.fnt` and `.snd` files the engine reads, and
+packs sprites into atlases and texture arrays described by a plain JSON tracker. Its bakers are also static
+libraries, so an editor can bake, pack and preview without shelling out.
 
 ---
 
@@ -18,6 +18,8 @@ can bake, pack and preview without shelling out.
 - **Generated maps** — tangent-space normal maps (Sobel, Scharr, Prewitt or central differences, over several
   octaves) and greyscale relief maps (levels, contrast, gamma and a shaped bevel from the outline), both from one
   image read as a height.
+- **Models** — FBX into a `.mdl` manifest with its `.msh` mesh, `.skl` skeleton and one `.anm` per clip, with
+  levels of detail, a chosen set of vertex attributes, and clips that play once and hold.
 - **Fonts** — TTF, OTF and TTC into multi-channel signed distance fields (MTSDF through msdfgen), with kerning,
   any set of codepoints, and fallback faces for the codepoints a face lacks.
 - **Sounds** — FLAC, MP3 and WAV, resampled to the mixer's 48 kHz, stored as 16-bit PCM, IMA ADPCM or Opus.
@@ -59,6 +61,9 @@ Studio normal rock_height.png rock_normal.tex --preset normal --wrap --strength 
 
 # A font with Latin-1 and punctuation, falling back to a second face
 Studio bake Inter.ttf --charset latin1,punctuation --fallback "NotoSymbols.ttf=0x2190-0x21FF"
+
+# A rigged character, with its attack and death clips playing once
+Studio bake Knight.fbx --once Attack,Death
 
 # A sound effect as ADPCM
 Studio bake hit.wav --encoding Adaptive

@@ -221,6 +221,15 @@ namespace Studio::Texture
             return false;
         }
 
+        // A square atlas takes the longer side, which would pass the shorter limit when the two differ.
+        if (Settings.Square && Settings.Layout == Mode::Atlas && Settings.Width != Settings.Height)
+        {
+            LOG_E("Texture: '--square' needs '--width' and '--height' to match, not {0} and {1}",
+                Settings.Width, Settings.Height);
+
+            return false;
+        }
+
         // An array gives every region a slice of its own, each the size asked for or else the largest region's.
         if (Settings.Layout == Mode::Array)
         {
