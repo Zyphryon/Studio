@@ -15,6 +15,7 @@
 #include <Model/Baker.hpp>
 #include <Sound/Baker.hpp>
 #include <Texture/Baker.hpp>
+#include <stdio.h>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -43,163 +44,266 @@ namespace Studio::Application
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static void PrintTextures()
-    {
-        LOG_I("Textures ({0}):", List(Texture::Importer::kTypes));
-        LOG_I("  bake <source> [destination]     Bake an image into a '.{0}'", Texture::Exporter::kOutput);
-        LOG_I("  pack <image|folder>...          Pack images into an atlas or array; '--output' names its tracker");
-        LOG_I("  build <tracker.json>            Draw a tracker's texture again, after its regions were edited");
-        LOG_I("  normal <source> [destination]   Draw a normal map, as a '.png' or a '.{0}'", Texture::Exporter::kOutput);
-        LOG_I("  relief <source> [destination]   Draw a relief map, as a '.png' or a '.{0}'", Texture::Exporter::kOutput);
-        LOG_I("  extract <texture> [destination] Write each slice as a '.png', numbered '_0', '_1'... if several");
-        LOG_I("  formats                         List every name '--format' accepts");
-        LOG_I("");
-        LOG_I("Texture switches (bake, pack, build; normal and relief into a '.{0}'):", Texture::Exporter::kOutput);
-        LOG_I("  --format <name>       Format, such as R8UIntNorm or RGBA16Float               [inferred]");
-        LOG_I("  --mipmaps             Generate a full mip chain down to 1x1                   [off]");
-        LOG_I("  --compressed          LZ4-compress the payload when it shrinks the output     [on]");
-        LOG_I("  --linear              Read the source as linear; '--no-linear' for sRGB art   [on]");
-        LOG_I("  --layered             Write a lone image as a one-slice array                 [off]");
-        LOG_I("  --cube <c>x<r>        bake: cut the source into cube faces, a grid counted in faces");
-        LOG_I("  --array <w>x<h>       bake: cut the source into array slices of that size in texels");
-        LOG_I("");
-        LOG_I("Pack switches (pack, and build with '--repack'; build always reads '--fill' and '--headroom'):");
-        LOG_I("  --output <path>       Tracker to write; the texture goes beside it            [pack: required]");
-        LOG_I("  --texture <path>      Write the texture here instead                          [tracker's name]");
-        LOG_I("  --mode <m>            Atlas shares slices; Array gives each region its own    [Atlas]");
-        LOG_I("  --width <n>           Widest a slice may grow, in pixels                      [2048]");
-        LOG_I("  --height <n>          Tallest a slice may grow, in pixels                     [2048]");
-        LOG_I("  --padding <n>         Empty pixels between neighbouring regions               [1]");
-        LOG_I("  --extrude <n>         Pixels each region's edge is repeated outward           [0]");
-        LOG_I("  --extent <w>x<h>      Array: size of every slice                              [largest region]");
-        LOG_I("  --fit <f>             Array: Stretch, Center or Contain each region           [Stretch]");
-        LOG_I("  --headroom <n>        Array: round the slice count up to a multiple of n      [1]");
-        LOG_I("  --fill <RRGGBBAA>     Colour of the pixels no region covers, as stored        [00000000]");
-        LOG_I("  --pot                 Round each side of a slice up to a power of two         [on]");
-        LOG_I("  --square              Keep each slice square                                  [off]");
-        LOG_I("  --pages               Spill what does not fit onto further slices             [off]");
-        LOG_I("  --repack              build: place the regions again instead of keeping their places");
-        LOG_I("");
-        LOG_I("Normal switches:");
-        LOG_I("  --channel <c>         Height channel: Luminance, Red, Green, Blue or Alpha    [Luminance]");
-        LOG_I("  --filter <k>          Slope filter: Central, Sobel, Scharr or Prewitt         [Sobel]");
-        LOG_I("  --strength <x>        How steep one unit of height reads                      [2]");
-        LOG_I("  --blur <px>           Smooth the height before measuring it                   [0]");
-        LOG_I("  --octaves <n>         Scales added, each twice as coarse, 1-8                 [1]");
-        LOG_I("  --falloff <x>         Weight of each coarser scale against the one before     [0.5]");
-        LOG_I("  --invert              Read dark as raised                                     [off]");
-        LOG_I("  --flip-x, --flip-y    Mirror an axis; '--flip-y' for green-down programs      [off]");
-        LOG_I("  --wrap                Wrap around the edges, for tiling textures              [off]");
-        LOG_I("  --masked              Transparent pixels are ground, so the outline stands up [on]");
-        LOG_I("");
-        LOG_I("Relief switches (and '--channel', '--invert', '--blur', '--wrap', '--masked' as for normal maps):");
-        LOG_I("  --low <x>, --high <x> Heights read as the bottom and the top                  [0 and 1]");
-        LOG_I("  --contrast <x>        Spread around the middle; above 1 hardens               [1]");
-        LOG_I("  --brightness <x>      Lift every height, before the contrast                  [0]");
-        LOG_I("  --gamma <x>           Bend the heights; above 1 sinks the middle tones        [1]");
-        LOG_I("  --bevel <px>          Distance from the outline to full height; 0 for none    [0]");
-        LOG_I("  --shape <s>           Bevel profile: Linear, Round, Sharp or Plateau          [Round]");
-        LOG_I("  --detail <x>          How much of the image's own height rides on the bevel   [1]");
-        LOG_I("  Masked pixels sink to the bottom of a relief.");
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-    static void PrintFonts()
-    {
-        LOG_I("Fonts ({0}):", List(Font::Importer::kTypes));
-        LOG_I("  bake <source> [destination]     Bake a typeface into a '.{0}'", Font::Exporter::kOutput);
-        LOG_I("");
-        LOG_I("Font switches:");
-        LOG_I("  --size <px>           Em size the glyphs are generated at                     [40]");
-        LOG_I("  --range <texels>      Width of the band the distance fades across             [20]");
-        LOG_I("  --angle <radians>     Join angle past which an edge counts as a corner        [3]");
-        LOG_I("  --charset <list>      Codepoints to bake, such as latin1,0x2010-0x205E        [ascii]");
-        LOG_I("  --face <index>        Typeface to read out of a collection                    [0]");
-        LOG_I("  --padding <texels>    Gap between neighbouring glyphs                         [1]");
-        LOG_I("  --limit <texels>      Largest atlas page before another one opens             [8192]");
-        LOG_I("  --underline <em>      Vertical space an underline takes                       [1.2]");
-        LOG_I("  --fallback <list>     More typefaces, as 'path[=charset];...'; the first carrying a codepoint keeps it");
-        LOG_I("  A charset lists presets (ascii, latin1, punctuation), codepoints and 'first-last' ranges, split by");
-        LOG_I("  commas; numbers are decimal unless they start with '0x'. The range also pads every glyph and is how");
-        LOG_I("  far an outline or glow can reach, so raise the size, not the range, when glyphs look soft.");
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-    static void PrintModels()
-    {
-        LOG_I("Models ({0}):", List(Model::Importer::kTypes));
-        LOG_I("  bake <source> [destination]     Bake a scene into a '.{0}', '.{1}', '.{2}' and a '.{3}' per clip",
-            Model::Exporter::kOutput, Model::Exporter::kMeshOutput, Model::Exporter::kSkeletonOutput,
-            Model::Exporter::kAnimationOutput);
-        LOG_I("");
-        LOG_I("Model switches:");
-        LOG_I("  --scale <factor>      Uniform factor every position is scaled by              [1]");
-        LOG_I("  --units <metres>      Metres one baked unit stands for, 0 to keep the source's [0]");
-        LOG_I("  --rate <hertz>        Samples per second every clip is keyed on               [30]");
-        LOG_I("  --interpolation <i>   Step, Linear, Cubic or Hermite                          [Linear]");
-        LOG_I("  --attributes <list>   Attributes to write and their streams, see below        [all in one]");
-        LOG_I("  --normals             Generate normals where the scene carries none           [on]");
-        LOG_I("  --tangents            Generate tangents where the scene carries none          [on]");
-        LOG_I("  --rig                 Carry the skin and its clips across                     [on]");
-        LOG_I("  --lod <n>             Reduced levels of detail after the full mesh, 0 to 3    [3]");
-        LOG_I("  --coverage <list>     View height share each level is kept down to, by commas [0.03,0.015,0.0075]");
-        LOG_I("  --drift <pixels>      Pixels a level may stray at 1080 lines, 0 for --coverage [1]");
-        LOG_I("  --density <n>         Pixels a unit covers up close, to warn of a mesh too dense, 0 for never [64]");
-        LOG_I("  --once <names>        Clips that play once and hold, by baked name, by commas [none]");
-        LOG_I("  The attribute list names Position, Normal, Tangent, TexCoord0, TexCoord1, Color0, BlendIndices and");
-        LOG_I("  BlendWeights; a bracketed run shares one interleaved stream and a bare name is a stream of its own,");
-        LOG_I("  as in '[Position],[Normal,Tangent,TexCoord0]'. It has to name Position, and an attribute the scene");
-        LOG_I("  lacks is left out. Cubic fits a spline through the samples for free; Hermite stores the source's");
-        LOG_I("  slope at each one and writes every sample three times over.");
-        LOG_I("  Every node is flattened into one mesh with its levels of detail, one primitive per material. The");
-        LOG_I("  manifest carries every material inline, its images renamed to the '.tex' the texture bake writes.");
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-    static void PrintSounds()
-    {
-        LOG_I("Sounds ({0}):", List(Sound::Importer::kTypes));
-        LOG_I("  bake <source> [destination]     Bake a sound into a '.{0}'", Sound::Exporter::kOutput);
-        LOG_I("");
-        LOG_I("Sound switches:");
-        LOG_I("  --encoding <e>        Linear (16-bit), Adaptive (IMA ADPCM) or Opus           [Linear]");
-        LOG_I("  --bitrate <n>         Rate Opus aims for, in bits per second                  [96000]");
-        LOG_I("  --compressed          LZ4-compress the payload when it shrinks the output     [on]");
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
     void Usage::Print()
     {
-        LOG_I("Usage: Studio <command> <operands> [switches]");
-        LOG_I("");
-        LOG_I("Operands go before switches, since a switch takes the word after it as its value.");
-        LOG_I("A toggle is turned off with its '--no-' spelling, as in '--no-mipmaps'. Defaults are in brackets.");
-        LOG_I("Exit codes: 0 when everything was done, 1 when some of it failed, 2 when the command was wrong.");
-        LOG_I("");
-        LOG_I("Commands:");
-        LOG_I("  help                            Print this text");
-        LOG_I("  version                         Print the revision of every file Studio writes");
-        LOG_I("  bake <source> [destination]     Bake a texture, font, model or sound, picked by the source's extension");
-        LOG_I("");
-        LOG_I("Every command:");
-        LOG_I("  --preset <name>       Apply a preset: sprite, normal, relief, or one of your own");
-        LOG_I("  --presets <file>      JSON file of your own presets, searched before the built-in ones");
-        LOG_I("  A switch typed on the command line wins over the same switch in a preset.");
-        LOG_I("");
-        PrintTextures();
-        LOG_I("");
-        PrintFonts();
-        LOG_I("");
-        PrintModels();
-        LOG_I("");
-        PrintSounds();
+        Write("Usage: Studio <command> <operands> [switches]");
+        Write("");
+        Write("A switch with a value takes the word after it, or the text after '=', and a toggle takes none.");
+        Write("A toggle is turned off with its '--no-' spelling, as in '--no-mipmaps'. Defaults are in brackets.");
+        Write("Exit codes: 0 when everything was done, 1 when some of it failed, 2 when the command was wrong.");
+        Write("");
+        Write("Commands:");
+        Write("  help                            Print this text");
+        Write("  version                         Print the revision of every file Studio writes");
+        Write("  bake <source|folder>...         Bake each texture, font, model or sound, picked by its extension");
+        Write("");
+        Write("Every command:");
+        Show(Section::Every);
+        Write("  A switch typed on the command line wins over the same switch in a preset.");
+        Write("");
+        Write("Bake switches:");
+        Show(Section::Bake);
+        Write("  A folder bakes each file in it a baker reads, but not its subfolders or the files bakes write.");
+        Write("  The files bake in parallel, and the run ends with how many were baked and how many failed.");
+        Write("");
+        Write("Textures ({0}):", List(Texture::Importer::kTypes));
+        Write("  bake <source> [destination]     Bake an image into a '.{0}'", Texture::Exporter::kOutput);
+        Write("  pack <image|folder>...          Pack images into an atlas or array; '--output' names its tracker");
+        Write("  build <tracker.json>            Draw a tracker's texture again, after its regions were edited");
+        Write("  normal <source> [destination]   Draw a normal map, as a '.png' or a '.{0}'",
+            Texture::Exporter::kOutput);
+        Write("  relief <source> [destination]   Draw a relief map, as a '.png' or a '.{0}'",
+            Texture::Exporter::kOutput);
+        Write("  extract <texture> [destination] Write each slice as a '.png', numbered '_0', '_1'... if several");
+        Write("  formats                         List every name '--format' accepts");
+        Write("");
+        Write("Texture switches (bake, pack, build; normal and relief into a '.{0}'):", Texture::Exporter::kOutput);
+        Show(Section::Texture);
+        Write("");
+        Write("Pack switches (pack, and build with '--repack'; build always reads '--fill' and '--headroom'):");
+        Show(Section::Pack);
+        Write("  A repack keeps the tracker's mode, fit, spacing, pages and slice size, unless they are typed.");
+        Write("");
+        Write("Normal switches:");
+        Show(Section::Normal);
+        Write("");
+        Write("Relief switches (and '--channel', '--invert', '--blur', '--wrap', '--masked' as for normal maps):");
+        Show(Section::Relief);
+        Write("  Masked pixels sink to the bottom of a relief.");
+        Write("");
+        Write("Fonts ({0}):", List(Font::Importer::kTypes));
+        Write("  bake <source> [destination]     Bake a typeface into a '.{0}'", Font::Exporter::kOutput);
+        Write("");
+        Write("Font switches:");
+        Show(Section::Font);
+        Write("  A charset lists presets (ascii, latin1, punctuation), codepoints and 'first-last' ranges, split by");
+        Write("  commas; numbers are decimal unless they start with '0x'. The range also pads every glyph and is how");
+        Write("  far an outline or glow can reach, so raise the size, not the range, when glyphs look soft.");
+        Write("");
+        Write("Models ({0}):", List(Model::Importer::kTypes));
+        Write("  bake <source> [destination]     Bake a scene into a '.{0}', '.{1}', '.{2}' and a '.{3}' per clip",
+            Model::Exporter::kOutput, Model::Exporter::kMeshOutput, Model::Exporter::kSkeletonOutput,
+            Model::Exporter::kAnimationOutput);
+        Write("");
+        Write("Model switches:");
+        Show(Section::Model);
+        Write("  The attribute list names Position, Normal, Tangent, TexCoord0, TexCoord1, Color0, BlendIndices and");
+        Write("  BlendWeights; a bracketed run shares one interleaved stream and a bare name is a stream of its own,");
+        Write("  as in '[Position],[Normal,Tangent,TexCoord0]'. It has to name Position, and an attribute the scene");
+        Write("  lacks is left out. Cubic fits a spline through the samples for free; Hermite stores the source's");
+        Write("  slope at each one and writes every sample three times over.");
+        Write("  Every node is flattened into one mesh with its levels of detail, one primitive per material. The");
+        Write("  manifest carries every material inline, its images renamed to the '.tex' the texture bake writes.");
+        Write("");
+        Write("Sounds ({0}):", List(Sound::Importer::kTypes));
+        Write("  bake <source> [destination]     Bake a sound into a '.{0}'", Sound::Exporter::kOutput);
+        Write("");
+        Write("Sound switches:");
+        Show(Section::Sound);
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    void Usage::Write(Text Line)
+    {
+        fwrite(Line.GetData(), 1, Line.GetSize(), stdout);
+        fputc('\n', stdout);
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Usage::Spell(UInt Count, ConstPtr<ConstPtr<Char>> Arguments, Ref<Sequence<Str>> Output)
+    {
+        for (UInt Index = 0; Index < Count; ++Index)
+        {
+            const Text Word = StrConvert(Arguments[Index]);
+            Ref<Str>   Copy = Output.Append(Word);
+
+            if (Index == 0 || !StrStartsWith(Word, "--"))
+            {
+                continue;
+            }
+
+            // Split as the engine reads it, a value after an equals sign and a toggle turned off by `--no-`.
+            const Text Switch  = Word.Slice(2);
+            const SInt Equals  = StrFind(Switch, '=');
+            const Text Spelled = (Equals >= 0) ? Switch.Slice(0, Equals) : Switch;
+            const Bool Negated = Equals < 0 && StrStartsWith(Spelled, "no-");
+            const Text Name    = Negated ? Spelled.Slice(3) : Spelled;
+
+            const ConstPtr<Option> Found = Find(Name);
+
+            if (Found == nullptr)
+            {
+                LOG_E("Studio: '--{0}' is not a switch; run 'Studio help' for the list", Name);
+
+                return false;
+            }
+
+            if (!Found->Hint.IsEmpty() && Negated)
+            {
+                LOG_E("Studio: '--{0}' takes a value, so it has no '--no-' spelling", Name);
+
+                return false;
+            }
+
+            if (Found->Hint.IsEmpty() && Equals < 0 && !Negated)
+            {
+                Copy.Append("=true");
+            }
+        }
+        return true;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Usage::Check(ConstRef<Environment> Typed, ConstRef<Environment> Parsed, Text Command, UInt16 Reader)
+    {
+        for (ConstRef<Option> Entry : kOptions)
+        {
+            if (!HasAnyBit(Entry.Readers, Reader))
+            {
+                // A preset may carry switches for other commands, so only a typed one is refused.
+                if (Typed.Contains(Entry.Name) && !Reads(Entry.Name, Reader))
+                {
+                    LOG_E("Studio: '{0}' does not read '--{1}'", Command, Entry.Name);
+
+                    return false;
+                }
+                continue;
+            }
+
+            const Text Value = Parsed.GetText(Entry.Name, Text::Empty());
+
+            // A value that is not a number or a choice reads as something else, so it is refused here instead.
+            if (Entry.Test != nullptr && Parsed.Contains(Entry.Name) && !Entry.Test(Value))
+            {
+                LOG_E("Studio: '{0}' is not a value '--{1}' takes", Value, Entry.Name);
+
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    ConstPtr<Usage::Option> Usage::Find(Text Name)
+    {
+        for (ConstRef<Option> Entry : kOptions)
+        {
+            if (StrEqualCaseInsensitive(Entry.Name, Name))
+            {
+                return AddressOf(Entry);
+            }
+        }
+        return nullptr;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Usage::Reads(Text Name, UInt16 Reader)
+    {
+        for (ConstRef<Option> Entry : kOptions)
+        {
+            if (HasAnyBit(Entry.Readers, Reader) && StrEqualCaseInsensitive(Entry.Name, Name))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    void Usage::Show(Section Group)
+    {
+        for (ConstRef<Option> Entry : kOptions)
+        {
+            if (Entry.Group != Group)
+            {
+                continue;
+            }
+
+            const Str Spelling = Entry.Hint.IsEmpty()
+                ? Str::Print("--{0}", Entry.Name)
+                : Str::Print("--{0} {1}", Entry.Name, Entry.Hint);
+
+            if (Entry.Default.IsEmpty())
+            {
+                Write("  {0:21} {1}", Spelling, Entry.Help);
+            }
+            else
+            {
+                Write("  {0:21} {1:55} [{2}]", Spelling, Entry.Help, Entry.Default);
+            }
+        }
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Usage::IsToggle(Text Value)
+    {
+        UInt Cursor = 0;
+        StrExtractBool(Value, Cursor);
+
+        return Cursor == Value.GetSize();
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Usage::IsNumber(Text Value)
+    {
+        UInt Cursor = 0;
+        StrExtractNumber<Real64>(Value, Cursor);
+
+        return Cursor > 0 && Cursor == Value.GetSize();
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Usage::IsExtent(Text Value)
+    {
+        UInt         Cursor = 0;
+        const UInt32 Width  = StrExtractNumber<10, UInt32>(Value, Cursor);
+
+        if (Cursor >= Value.GetSize() || (Value[Cursor] != 'x' && Value[Cursor] != 'X'))
+        {
+            return false;
+        }
+        ++Cursor;
+
+        const UInt32 Height = StrExtractNumber<10, UInt32>(Value, Cursor);
+
+        return Cursor == Value.GetSize() && Width > 0 && Height > 0 && Width <= 0xFFFF && Height <= 0xFFFF;
     }
 }

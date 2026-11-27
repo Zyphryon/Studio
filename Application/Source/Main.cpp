@@ -12,6 +12,7 @@
 
 #include "Console.hpp"
 #include "Preset.hpp"
+#include "Usage.hpp"
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -24,8 +25,22 @@ namespace Studio::Application
 
     static Outcome Run(UInt Count, ConstPtr<ConstPtr<Char>> Arguments)
     {
+        Sequence<Str> Spelled;
+
+        if (!Usage::Spell(Count, Arguments, Spelled))
+        {
+            return Outcome::Misuse;
+        }
+
+        Sequence<ConstPtr<Char>> Words;
+
+        for (ConstRef<Str> Word : Spelled)
+        {
+            Words.Append(Word.GetData());
+        }
+
         Environment Typed;
-        Typed.Parse(Count, Arguments);
+        Typed.Parse(Words.GetSize(), Words.GetData());
 
         Sequence<Str> Switches;
 
@@ -36,16 +51,15 @@ namespace Studio::Application
 
         // The preset's switches go before the typed ones, and the last of a name is the one read, so typing a
         // switch overrides the preset.
-        Sequence<ConstPtr<Char>> Words;
-        Words.Append(Arguments[0]);
-
-        for (ConstRef<Str> Switch : Switches)
+        for (UInt Index = 0; Index < Switches.GetSize(); ++Index)
         {
-            Words.Append(Switch.GetData());
+            Words.Insert(Index + 1, Switches[Index].GetData());
         }
-        for (UInt Index = 1; Index < Count; ++Index)
+
+        // A preset's switches are held to the same list as the typed ones, so a misspelt one is refused as well.
+        if (Sequence<Str> Unused; !Usage::Spell(Switches.GetSize() + 1, Words.GetData(), Unused))
         {
-            Words.Append(Arguments[Index]);
+            return Outcome::Misuse;
         }
 
         Environment Parsed;
@@ -54,7 +68,7 @@ namespace Studio::Application
         ZyEngine::Subsystem::Host      Host;
         const Retainer<ZyJob::Service> Scheduler = Host.Register<ZyJob::Service>();
 
-        const Outcome Result = Console(* Scheduler).Run(Parsed);
+        const Outcome Result = Console(* Scheduler).Run(Parsed, Typed);
 
         Host.Teardown();
         return Result;

@@ -78,9 +78,16 @@ namespace Studio::Application
     {
         const Text Name = Parsed.GetText("preset", Text::Empty());
 
+        if (Name.IsEmpty() && Parsed.Contains("preset"))
+        {
+            LOG_E("Studio: '--preset' takes a name; the built-in ones are sprite, normal and relief");
+
+            return false;
+        }
+
         if (Name.IsEmpty())
         {
-            return !Parsed.Contains("preset");
+            return true;
         }
 
         if (const Text File = Parsed.GetText("presets", Text::Empty()); !File.IsEmpty())

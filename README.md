@@ -11,7 +11,8 @@ libraries, so an editor can bake, pack and preview without shelling out.
 ## ✨ Features
 
 - **Textures** — PNG, JPEG, TGA, BMP and HDR (or a baked `.tex`) into any engine texture format, with an optional
-  mip chain, LZ4 compression, cube maps and arrays cut from a grid.
+  mip chain filtered in linear light, LZ4 compression, cube maps and arrays cut from a grid. Mips can weigh colour
+  by alpha, keep an alpha test's coverage, and renormalise a normal map.
 - **Atlases and arrays** — `pack` places images with MaxRects into an atlas or one slice each into an array
   (stretched to the slice, centred, or shrunk to fit with `--fit`), and writes a tracker beside the texture. Edit the tracker by hand, and `build` draws it again. Slots keep their slice,
   arrays grow with headroom, and channels can be packed from other images (a height into alpha, say).
@@ -19,10 +20,12 @@ libraries, so an editor can bake, pack and preview without shelling out.
   octaves) and greyscale relief maps (levels, contrast, gamma and a shaped bevel from the outline), both from one
   image read as a height.
 - **Models** — FBX into a `.mdl` manifest with its `.msh` mesh, `.skl` skeleton and one `.anm` per clip, with
-  levels of detail, a chosen set of vertex attributes, and clips that play once and hold.
+  MikkTSpace tangents, a chosen set of vertex attributes, clips that play once and hold, and levels of detail
+  that are each checked against the source before they are kept.
 - **Fonts** — TTF, OTF and TTC into multi-channel signed distance fields (MTSDF through msdfgen), with kerning,
   any set of codepoints, and fallback faces for the codepoints a face lacks.
-- **Sounds** — FLAC, MP3 and WAV, resampled to the mixer's 48 kHz, stored as 16-bit PCM, IMA ADPCM or Opus.
+- **Sounds** — FLAC, MP3 and WAV, resampled to the mixer's 48 kHz through a windowed sinc, stored as 16-bit PCM,
+  IMA ADPCM or Opus, which can be encoded to loop without a click.
 - **Deterministic** — the same source and switches bake to the same bytes, every time.
 
 ---
@@ -33,11 +36,12 @@ libraries, so an editor can bake, pack and preview without shelling out.
 Studio <command> <operands> [switches]
 ```
 
-Operands come first: a switch takes the word after it as its value. `Studio help` prints every switch.
+A switch with a value takes the word after it, and a toggle takes none. A switch the command does not read is
+refused. `Studio help` prints every switch.
 
 | Command | Does |
 |---------|------|
-| `bake <source> [dst]` | Bakes one image, typeface or sound; the source's extension picks the baker |
+| `bake <source\|folder>... [--output <dir>]` | Bakes each image, model, typeface or sound; its extension picks the baker |
 | `pack <image\|folder>... --output <t.json>` | Packs images into an atlas (`--mode Atlas`) or an array (`--mode Array`) |
 | `build <t.json> [--repack]` | Draws a tracker's texture again after its regions were edited |
 | `normal <src> [dst]` | Draws a normal map, as a `.png` or a `.tex` |
@@ -51,6 +55,9 @@ A few examples:
 ```sh
 # A sprite: sRGB, mipmapped, as a one-slice array
 Studio bake hero.png --preset sprite
+
+# Everything in a folder a baker reads, in parallel, written into another folder
+Studio bake Art/ --output Content/
 
 # Every image in a folder packed into one atlas, then drawn again after hand edits
 Studio pack Sprites/ --output Atlas/Sprites.json --padding 2 --extrude 1
@@ -75,8 +82,8 @@ Studio bake hit.wav --encoding Adaptive
 
 | Preset | Switches |
 |--------|----------|
-| `sprite` | `--layered --no-linear --mipmaps` |
-| `normal` | `--layered --linear --mipmaps` |
+| `sprite` | `--layered --no-linear --mipmaps --transparent` |
+| `normal` | `--layered --linear --mipmaps --normal` |
 | `relief` | `--layered --linear --mipmaps --format R8UIntNorm` |
 
 A project can keep its own in a JSON file passed with `--presets <file>`, searched before the built-in ones:
@@ -103,6 +110,9 @@ Everything is fetched by CMake; nothing needs installing by hand.
 |---------|---------|-----|
 | [Zyphryon Engine](https://github.com/Zyphryon/Engine) | everything | Containers, strings, formats and the file layouts Studio writes |
 | [stb](https://github.com/nothings/stb) | textures, fonts | Image decoding and PNG writing; TrueType parsing |
+| [bc7enc](https://github.com/richgel999/bc7enc_rdo) | textures | BC1 to BC7 block encoding |
+| [ufbx](https://github.com/ufbx/ufbx) *(v0.23.1)* | models | FBX reading |
+| [meshoptimizer](https://github.com/zeux/meshoptimizer) *(v1.3)* | models | Welding, tangents, levels of detail, shadow runs, draw and vertex order |
 | [msdfgen](https://github.com/Chlumsky/msdfgen) *(v1.12)* | fonts | Multi-channel signed distance fields |
 | [dr_libs](https://github.com/mackron/dr_libs) | sounds | FLAC, MP3 and WAV decoding |
 | [libopus](https://opus-codec.org/) *(v1.5.2)* | sounds | Opus encoding |
@@ -141,8 +151,10 @@ TARGET_LINK_LIBRARIES(${PROJECT_NAME} PRIVATE "Studio_Font" "Studio_Sound" "Stud
 | Target | Namespace | Bakes |
 |--------|-----------|-------|
 | `Studio_Texture` | `Studio::Texture` | `.tex`, atlas and array trackers, normal and relief maps |
+| `Studio_Model` | `Studio::Model` | `.mdl`, `.msh`, `.skl`, `.anm` |
 | `Studio_Font` | `Studio::Font` | `.fnt` |
 | `Studio_Sound` | `Studio::Sound` | `.snd` |
+| `Studio_Material` | `Studio::Material` | `.mtl` |
 
 Each domain depends on the engine alone, never on another domain.
 

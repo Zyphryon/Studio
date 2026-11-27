@@ -21,8 +21,8 @@ namespace Studio::Application
 
         /// \brief The built-in presets, in the layout a project's own file uses.
         static constexpr Text kBuiltin = R"({
-            "sprite": { "layered": true, "linear": false, "mipmaps": true },
-            "normal": { "layered": true, "linear": true,  "mipmaps": true },
+            "sprite": { "layered": true, "linear": false, "mipmaps": true, "transparent": true },
+            "normal": { "layered": true, "linear": true,  "mipmaps": true, "normal": true },
             "relief": { "layered": true, "linear": true,  "mipmaps": true, "format": "R8UIntNorm" }
         })";
 
