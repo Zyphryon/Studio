@@ -31,5 +31,20 @@ namespace Studio::Texture
         /// \param Format The format to produce.
         /// \return The converted bitmap, or an invalid one on failure.
         static Bitmap Transcode(AnyRef<Bitmap> Source, ZyGraphic::TextureFormat Format);
+
+        /// \brief Converts a run of texels from one interleaved format into another.
+        ///
+        /// \param Source The texels to read, one after another.
+        /// \param From   The format the source texels are stored in.
+        /// \param Target Receives the converted texels, one after another.
+        /// \param To     The format to write.
+        /// \param Texels The number of texels in the run.
+        /// \return `true` if both formats are interleaved and the run was converted, otherwise `false`.
+        static Bool Convert(
+            ConstPtr<Byte>           Source,
+            ZyGraphic::TextureFormat From,
+            Ptr<Byte>                Target,
+            ZyGraphic::TextureFormat To,
+            UInt32                   Texels);
     };
 }

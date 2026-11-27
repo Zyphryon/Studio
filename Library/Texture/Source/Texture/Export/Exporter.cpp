@@ -13,7 +13,6 @@
 #include "Exporter.hpp"
 #include "Texture/Process/Encoder.hpp"
 #include "Texture/Process/Resampler.hpp"
-#include "Texture/Process/Transcoder.hpp"
 #include <Zyphryon.Graphic/Metadata.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -105,19 +104,16 @@ namespace Studio::Texture
             }
         }
 
-        // Filtering runs at each surface's own depth, so the conversion to the target format happens last.
         const UInt8 Levels = Profile.Mipmaps ? ZyGraphic::GetLevelCount(Width, Height) : 1;
 
         Sequence<Bitmap> Baked;
         Baked.Resize(Slices.GetSize());
 
-        // TODO: Resizer
-
         Scheduler.Parallel(ZyJob::Lane::Compute, static_cast<UInt32>(Slices.GetSize()), [&](UInt32 Start, UInt32 End)
         {
             for (UInt32 Index = Start; Index < End; ++Index)
             {
-                Baked[Index] = Prepare(Scheduler, Move(Slices[Index]), Levels, Format);
+                Baked[Index] = Prepare(Scheduler, Move(Slices[Index]), Levels, Format, Profile);
             }
         });
 
@@ -142,19 +138,26 @@ namespace Studio::Texture
 
         const UInt32 Length = static_cast<UInt32>(Total);
 
-        // Gathered slice-major, which is the order the loader and both drivers read a sliced payload in.
-        Blob      Payload = Blob::Allocate<Byte>(Length);
-        Ptr<Byte> Cursor  = Payload.GetData<Byte>();
+        // Several slices are gathered slice-major, which is the order the loader and both drivers read a payload in.
+        Blob Payload;
 
-        for (ConstRef<Bitmap> Result : Baked)
+        if (Baked.GetSize() > 1)
         {
-            const ConstSpan<Byte> Bytes = Result.GetPixels();
+            Payload = Blob::Allocate<Byte>(Length);
 
-            Copy(Cursor, Bytes.GetSize(), Bytes.GetData());
-            Cursor += Bytes.GetSize();
+            Ptr<Byte> Cursor = Payload.GetData<Byte>();
+
+            for (ConstRef<Bitmap> Result : Baked)
+            {
+                const ConstSpan<Byte> Bytes = Result.GetPixels();
+
+                Copy(Cursor, Bytes.GetSize(), Bytes.GetData());
+                Cursor += Bytes.GetSize();
+            }
         }
 
-        const ConstSpan<Byte> Bytes = ConstSpan(Payload.GetData<Byte>(), Length);
+        // A lone slice is written from where it was baked.
+        const ConstSpan<Byte> Bytes = Payload ? ConstSpan(Payload.GetData<Byte>(), Length) : Baked[0].GetPixels();
 
         Writer Output(Length + 32);
         Output.Write<UInt32>(kMagic);
@@ -187,18 +190,29 @@ namespace Studio::Texture
         UInt8                    Levels,
         ZyGraphic::TextureFormat Format)
     {
-        if (!Encoder::IsSupported(Format))
-        {
-            return Transcoder::Transcode(Resampler::Mipmap(Move(Source), Levels), Format);
-        }
+        return Prepare(Scheduler, Move(Source), Levels, Format, Profile());
+    }
 
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bitmap Exporter::Prepare(
+        Ref<ZyJob::Service>      Scheduler,
+        AnyRef<Bitmap>           Source,
+        UInt8                    Levels,
+        ZyGraphic::TextureFormat Format,
+        ConstRef<Profile>        Profile)
+    {
         // A block format is packed from the plain one it decodes to, once every level is filtered and converted.
-        const Bitmap Plain = Transcoder::Transcode(Resampler::Mipmap(Move(Source), Levels), Encoder::GetSource(Format));
+        const Bool                     Packed = Encoder::IsSupported(Format);
+        const ZyGraphic::TextureFormat Plain  = Packed ? Encoder::GetSource(Format) : Format;
 
-        if (Plain.GetPixels().IsEmpty())
+        Bitmap Chain = Resampler::Mipmap(Scheduler, Move(Source), Levels, Plain, Profile);
+
+        if (!Packed || Chain.GetPixels().IsEmpty())
         {
-            return Bitmap();
+            return Chain;
         }
-        return Encoder::Encode(Scheduler, Plain, Format);
+        return Encoder::Encode(Scheduler, Chain, Format);
     }
 }

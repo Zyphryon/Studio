@@ -74,23 +74,6 @@ namespace Studio::Texture
 
     Bitmap Transcoder::Transcode(AnyRef<Bitmap> Source, ZyGraphic::TextureFormat Format)
     {
-        const ZyGraphic::TextureMetadata Target = ZyGraphic::GetTextureMetadata(Format);
-        const ZyGraphic::TextureMetadata Origin = ZyGraphic::GetTextureMetadata(Source.GetFormat());
-
-        if (!IsInterleaved(Target))
-        {
-            LOG_E("Texture: '{0}' cannot be written as interleaved components", ZyEnum::GetName(Format));
-
-            return Bitmap();
-        }
-
-        if (!IsInterleaved(Origin))
-        {
-            LOG_E("Texture: '{0}' must be unpacked before it can be converted", ZyEnum::GetName(Source.GetFormat()));
-
-            return Bitmap();
-        }
-
         // Already in the target format, so the bitmap is handed back as it is.
         if (Format == Source.GetFormat())
         {
@@ -103,17 +86,51 @@ namespace Studio::Texture
 
         Blob Output = Blob::Allocate<Byte>(ZyGraphic::GetLevelOffset(Format, Width, Height, Levels));
 
-        const auto Process = Pick(Origin, Target);
-
         for (UInt8 Level = 0; Level < Levels; ++Level)
         {
-            Process(
+            const Bool Converted = Convert(
                 Source.GetPixels().GetData() + ZyGraphic::GetLevelOffset(Source.GetFormat(), Width, Height, Level),
-                Origin.Components,
-                Output.GetData()             + ZyGraphic::GetLevelOffset(Format, Width, Height, Level),
-                Target.Components,
+                Source.GetFormat(),
+                Output.GetData<Byte>()       + ZyGraphic::GetLevelOffset(Format, Width, Height, Level),
+                Format,
                 ZyGraphic::GetLevelExtent(Width, Level) * ZyGraphic::GetLevelExtent(Height, Level));
+
+            if (!Converted)
+            {
+                return Bitmap();
+            }
         }
         return Bitmap(Format, Width, Height, Levels, Move(Output));
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Bool Transcoder::Convert(
+        ConstPtr<Byte>           Source,
+        ZyGraphic::TextureFormat From,
+        Ptr<Byte>                Target,
+        ZyGraphic::TextureFormat To,
+        UInt32                   Texels)
+    {
+        const ZyGraphic::TextureMetadata Origin = ZyGraphic::GetTextureMetadata(From);
+        const ZyGraphic::TextureMetadata Result = ZyGraphic::GetTextureMetadata(To);
+
+        if (!IsInterleaved(Result))
+        {
+            LOG_E("Texture: '{0}' cannot be written as interleaved components", ZyEnum::GetName(To));
+
+            return false;
+        }
+
+        if (!IsInterleaved(Origin))
+        {
+            LOG_E("Texture: '{0}' must be unpacked before it can be converted", ZyEnum::GetName(From));
+
+            return false;
+        }
+
+        Pick(Origin, Result)(Source, Origin.Components, Target, Result.Components, Texels);
+        return true;
     }
 }

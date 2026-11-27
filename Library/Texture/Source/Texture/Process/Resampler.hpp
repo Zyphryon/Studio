@@ -12,7 +12,9 @@
 // [  HEADER  ]
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#include "Texture/Image/Bitmap.hpp"
+#include "Texture/Image/Canvas.hpp"
+#include "Texture/Profile.hpp"
+#include <Zyphryon.Job/Service.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -20,24 +22,32 @@
 
 namespace Studio::Texture
 {
-    /// \brief Resizes a bitmap, averaging the source texels each target texel covers.
+    /// \brief Resizes linear pixels, weighing each source texel by the share of a target texel it covers.
     class Resampler final
     {
     public:
 
-        /// \brief Filters the base level of a bitmap into a new extent.
+        /// \brief Filters a canvas into a new extent.
         ///
-        /// \param Source The bitmap to filter.
-        /// \param Width  The target width, in pixels.
-        /// \param Height The target height, in pixels.
-        /// \return The resized bitmap, or an invalid one on failure.
-        static Bitmap Resize(ConstRef<Bitmap> Source, UInt16 Width, UInt16 Height);
+        /// \param Source The canvas to filter.
+        /// \param Width  The target width, in pixels, at least one.
+        /// \param Height The target height, in pixels, at least one.
+        /// \return The resized canvas, or an empty one on failure.
+        static Canvas Resize(ConstRef<Canvas> Source, UInt16 Width, UInt16 Height);
 
-        /// \brief Filters a single-level bitmap down into a chain of successively halved levels.
+        /// \brief Filters a single-level bitmap down into a chain of successively halved levels, each written once.
         ///
-        /// \param Source The single-level bitmap to expand.
-        /// \param Levels The number of levels, the base included.
-        /// \return The whole chain, or an invalid bitmap on failure.
-        static Bitmap Mipmap(AnyRef<Bitmap> Source, UInt8 Levels);
+        /// \param Scheduler The pool each level's rows are spread over.
+        /// \param Source    The single-level bitmap to expand.
+        /// \param Levels    The number of levels, the base included.
+        /// \param Format    The interleaved format every level is written in.
+        /// \param Profile   The settings that say how alpha, coverage and normals are filtered.
+        /// \return The whole chain in \p Format, or an invalid bitmap on failure.
+        static Bitmap Mipmap(
+            Ref<ZyJob::Service>      Scheduler,
+            AnyRef<Bitmap>           Source,
+            UInt8                    Levels,
+            ZyGraphic::TextureFormat Format,
+            ConstRef<Profile>        Profile);
     };
 }

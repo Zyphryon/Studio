@@ -24,7 +24,11 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static void Pack(ZyGraphic::TextureFormat Format, ConstPtr<Byte> Texels, Ptr<Byte> Block)
+    static void Pack(
+        ZyGraphic::TextureFormat               Format,
+        ConstRef<bc7enc_compress_block_params> Parameters,
+        ConstPtr<Byte>                         Texels,
+        Ptr<Byte>                              Block)
     {
         using enum ZyGraphic::TextureFormat;
 
@@ -32,7 +36,8 @@ namespace Studio::Texture
         {
         case BC1UIntNorm:
         case BC1UIntNorm_sRGB:
-            rgbcx::encode_bc1(rgbcx::MAX_LEVEL, Block, Texels, false, false);
+            // Three-colour blocks are allowed, which never pick the transparent black since alpha is not asked for.
+            rgbcx::encode_bc1(rgbcx::MAX_LEVEL, Block, Texels, true, false);
             break;
         case BC2UIntNorm:
         case BC2UIntNorm_sRGB:
@@ -57,18 +62,8 @@ namespace Studio::Texture
             break;
         case BC7UIntNorm:
         case BC7UIntNorm_sRGB:
-        {
-            bc7enc_compress_block_params Parameters;
-            bc7enc_compress_block_params_init(AddressOf(Parameters));
-            Parameters.m_uber_level = 2;
-
-            if (Format == BC7UIntNorm)
-            {
-                bc7enc_compress_block_params_init_linear_weights(AddressOf(Parameters));
-            }
             bc7enc_compress_block(Block, Texels, AddressOf(Parameters));
             break;
-        }
         default:
             break;
         }
@@ -139,49 +134,70 @@ namespace Studio::Texture
         const UInt32 Stride = ZyGraphic::GetTextureMetadata(Plain).BitsPerPixel / 8;
         const UInt32 Size   = ZyGraphic::GetTextureMetadata(Format).BitsPerPixel * 2;
 
-        Blob Output = Blob::Allocate<Byte>(ZyGraphic::GetLevelOffset(Format, Width, Height, Levels));
+        ZY_ASSERT(Levels <= kLevels, "More levels than a 16-bit extent can halve into");
+
+        // The BC7 settings are made once, perceptual for sRGB colour and uniform for anything else.
+        bc7enc_compress_block_params Parameters;
+        bc7enc_compress_block_params_init(AddressOf(Parameters));
+        Parameters.m_uber_level = 2;
+
+        if (Format == ZyGraphic::TextureFormat::BC7UIntNorm)
+        {
+            bc7enc_compress_block_params_init_linear_weights(AddressOf(Parameters));
+        }
+
+        // Blocks are numbered across the whole chain, so the small levels share the workers with the large ones.
+        Array<UInt32, kLevels + 1> First;
+        Array<UInt32, kLevels + 1> Origin;
+        First[0]  = 0;
+        Origin[0] = 0;
+
+        for (UInt8 Level = 0; Level < Levels; ++Level)
+        {
+            First[Level + 1]  = First[Level]  + ZyGraphic::GetLevelSize(Format, Width, Height, Level) / Size;
+            Origin[Level + 1] = Origin[Level] + ZyGraphic::GetLevelSize(Plain,  Width, Height, Level);
+        }
+
+        Blob Output = Blob::Allocate<Byte>(First[Levels] * Size);
 
         const ConstPtr<Byte> Input  = Source.GetPixels().GetData();
         const Ptr<Byte>      Target = Output.GetData<Byte>();
 
-        for (UInt8 Level = 0; Level < Levels; ++Level)
+        Scheduler.Parallel(ZyJob::Lane::Compute, First[Levels], [&](UInt32 Start, UInt32 End)
         {
-            const UInt32 Across = ZyGraphic::GetLevelExtent(Width,  Level);
-            const UInt32 Down   = ZyGraphic::GetLevelExtent(Height, Level);
+            UInt8 Level = 0;
 
-            const ConstPtr<Byte> Pixels = Input  + ZyGraphic::GetLevelOffset(Plain,  Width, Height, Level);
-            const Ptr<Byte>      Blocks = Target + ZyGraphic::GetLevelOffset(Format, Width, Height, Level);
-
-            const UInt32 Columns = (Across + 3) / 4;
-            const UInt32 Rows    = (Down   + 3) / 4;
-
-            // Every row of blocks is packed on its own, so one large image is spread over every worker.
-            Scheduler.Parallel(ZyJob::Lane::Compute, Rows, [&](UInt32 First, UInt32 Last)
+            for (UInt32 Index = Start; Index < End; ++Index)
             {
-                for (UInt32 Row = First; Row < Last; ++Row)
+                while (Index >= First[Level + 1])
                 {
-                    for (UInt32 Column = 0; Column < Columns; ++Column)
+                    ++Level;
+                }
+
+                const UInt32 Across  = ZyGraphic::GetLevelExtent(Width,  Level);
+                const UInt32 Down    = ZyGraphic::GetLevelExtent(Height, Level);
+                const UInt32 Columns = (Across + 3) / 4;
+                const UInt32 Row     = (Index - First[Level]) / Columns;
+                const UInt32 Column  = (Index - First[Level]) % Columns;
+
+                // A level smaller than a block, or an edge that does not fill one, repeats its last texel.
+                Array<Byte, 128> Texels;
+
+                for (UInt32 Y = 0; Y < 4; ++Y)
+                {
+                    const UInt32 SourceY = Min(Row * 4 + Y, Down - 1);
+
+                    for (UInt32 X = 0; X < 4; ++X)
                     {
-                        // A level smaller than a block, or an edge that does not fill one, repeats its last texel.
-                        Array<Byte, 128> Texels;
+                        const UInt32         SourceX = Min(Column * 4 + X, Across - 1);
+                        const ConstPtr<Byte> Texel   = Input + Origin[Level] + (SourceY * Across + SourceX) * Stride;
 
-                        for (UInt32 Y = 0; Y < 4; ++Y)
-                        {
-                            const UInt32 SourceY = Min(Row * 4 + Y, Down - 1);
-
-                            for (UInt32 X = 0; X < 4; ++X)
-                            {
-                                const UInt32         SourceX = Min(Column * 4 + X, Across - 1);
-                                const ConstPtr<Byte> Texel   = Pixels + (SourceY * Across + SourceX) * Stride;
-
-                                Copy(Texels.GetData() + (Y * 4 + X) * Stride, Stride, Texel);
-                            }
-                        }
-                        Pack(Format, Texels.GetData(), Blocks + (Row * Columns + Column) * Size);
+                        Copy(Texels.GetData() + (Y * 4 + X) * Stride, Stride, Texel);
                     }
                 }
-            });
-        }
+                Pack(Format, Parameters, Texels.GetData(), Target + static_cast<UInt64>(Index) * Size);
+            }
+        });
         return Bitmap(Format, Width, Height, Levels, Move(Output));
     }
 }

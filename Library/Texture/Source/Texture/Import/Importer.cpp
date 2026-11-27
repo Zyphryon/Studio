@@ -13,6 +13,7 @@
 #include "Importer.hpp"
 #include "Texture/Export/Exporter.hpp"
 #include "Texture/Image/Canvas.hpp"
+#include "Texture/Process/Transcoder.hpp"
 #include <Zyphryon.Graphic/Metadata.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -66,21 +67,22 @@ namespace Studio::Texture
             return Surface();
         }
 
-        // Each depth gets its own loader, since the 8-bit one would tone-map or truncate a wider source.
+        // Colour is asked for by either switch, the linear one or a format with the sRGB curve.
+        const Bool Colour = !Profile.Linear || ZyGraphic::GetTextureMetadata(Profile.Format).IsSRGB;
+
+        // Each depth has its own loader, but 16-bit colour is read at 8 bits, the only depth the engine stores sRGB at.
         const Bool Real = stbi_is_hdr_from_memory(Encoded, Length);
-        const Bool Wide = !Real && stbi_is_16_bit_from_memory(Encoded, Length);
+        const Bool Wide = !Real && !Colour && stbi_is_16_bit_from_memory(Encoded, Length);
+        const Bool sRGB = Colour && !Real;
 
-        // The engine stores sRGB only at 8 bits, so a wider source stays linear.
-        const Bool sRGB = !Profile.Linear && !Real && !Wide;
-
-        if (!Profile.Linear && (Real || Wide))
+        if (Colour && Real)
         {
-            LOG_W("Texture: sRGB was requested but the source is {0}, which the engine only stores as linear",
-                Real ? "floating-point"_Text : "16-bit"_Text);
+            LOG_W("Texture: sRGB was requested but the source is floating-point, which is always read as linear");
         }
 
-        // The engine has no three-channel format and sRGB only as RGBA, so both cases expand to four channels.
-        const Bool   Expand  = Channels == 3 || (sRGB && Channels < 4);
+        // The engine has no three-channel format and sRGB only as RGBA, and grey fills every channel a format writes.
+        const UInt32 Filled  = ZyGraphic::GetTextureMetadata(Profile.Format).Components;
+        const Bool   Expand  = Channels == 3 || (Channels < 4 && (sRGB || Filled >= 3));
         const SInt32 Request = Expand ? STBI_rgb_alpha : Channels;
 
         if (sRGB && Channels < 3)
@@ -138,7 +140,15 @@ namespace Studio::Texture
         {
             stbi_image_free(Address);
         }));
-        return Surface::From(Bitmap(Format, static_cast<UInt16>(Width), static_cast<UInt16>(Height), 1, Move(Data)));
+
+        Bitmap Decoded(Format, static_cast<UInt16>(Width), static_cast<UInt16>(Height), 1, Move(Data));
+
+        // A float source with no format asked for is kept at half precision, which holds an HDR file's values to 65504.
+        if (Real && Profile.Format == ZyGraphic::TextureFormat::Unspecified)
+        {
+            Decoded = Transcoder::Transcode(Move(Decoded), ZyGraphic::TextureFormat::RGBA16Float);
+        }
+        return Surface::From(Move(Decoded));
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

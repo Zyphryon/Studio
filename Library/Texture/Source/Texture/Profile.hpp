@@ -54,6 +54,15 @@ namespace Studio::Texture
         /// `true` to generate a full mip chain down to 1x1, `false` to write the base level alone.
         Bool                     Mipmaps  = false;
 
+        /// `true` if alpha is opacity, which weighs each texel's colour down the mips, `false` if it holds data.
+        Bool                     Opacity  = false;
+
+        /// The alpha an alpha test cuts at, whose share of passing texels every mip keeps, or zero to keep none.
+        Real32                   Cutoff   = 0.0f;
+
+        /// `true` if the texels are tangent-space normals, renormalised in every mip, `false` for anything else.
+        Bool                     Normal   = false;
+
         /// `true` if the source holds linear values, `false` for colour art authored in sRGB.
         Bool                     Linear   = true;
 

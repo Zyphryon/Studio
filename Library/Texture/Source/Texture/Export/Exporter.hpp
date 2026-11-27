@@ -59,7 +59,7 @@ namespace Studio::Texture
 
         /// \brief Mips, transcodes and block-compresses one slice the way a bake does, for a live upload.
         ///
-        /// \param Scheduler The pool a block-compressed level's rows are packed on.
+        /// \param Scheduler The pool each level's rows and blocks are spread over.
         /// \param Source    The slice, holding its base level alone.
         /// \param Levels    The number of levels, the base included.
         /// \param Format    The format every level is written in.
@@ -69,5 +69,22 @@ namespace Studio::Texture
             AnyRef<Bitmap>           Source,
             UInt8                    Levels,
             ZyGraphic::TextureFormat Format);
+
+    private:
+
+        /// \brief Mips, transcodes and block-compresses one slice with the filter settings of a profile.
+        ///
+        /// \param Scheduler The pool each level's rows and blocks are spread over.
+        /// \param Source    The slice, holding its base level alone.
+        /// \param Levels    The number of levels, the base included.
+        /// \param Format    The format every level is written in.
+        /// \param Profile   The settings that say how alpha, coverage and normals are filtered.
+        /// \return Every level in \p Format, or an empty bitmap on failure.
+        static Bitmap Prepare(
+            Ref<ZyJob::Service>      Scheduler,
+            AnyRef<Bitmap>           Source,
+            UInt8                    Levels,
+            ZyGraphic::TextureFormat Format,
+            ConstRef<Profile>        Profile);
     };
 }

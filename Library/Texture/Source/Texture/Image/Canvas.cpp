@@ -87,9 +87,14 @@ namespace Studio::Texture
             return Bitmap();
         }
 
-        Bitmap Floats(kFormat, mWidth, mHeight, 1, Blob::Copy(ConstSpan(mPixels.GetData<Byte>(), mPixels.GetSize())));
+        const UInt32 Texels = static_cast<UInt32>(mWidth) * mHeight;
+        Blob         Output = Blob::Allocate<Byte>(ZyGraphic::GetLevelSize(Format, mWidth, mHeight, 0));
 
-        return Transcoder::Transcode(Move(Floats), Format);
+        if (!Transcoder::Convert(mPixels.GetData<Byte>(), kFormat, Output.GetData<Byte>(), Format, Texels))
+        {
+            return Bitmap();
+        }
+        return Bitmap(Format, mWidth, mHeight, 1, Move(Output));
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -102,26 +107,19 @@ namespace Studio::Texture
             return Canvas();
         }
 
-        // Only the base level is converted, so the transcoder is handed a copy of that level alone.
-        const UInt32 Length = ZyGraphic::GetLevelSize(Source.GetFormat(), Source.GetWidth(), Source.GetHeight(), 0);
-        Bitmap       Level(
-            Source.GetFormat(),
-            Source.GetWidth(),
-            Source.GetHeight(),
-            1,
-            Blob::Copy(Source.GetPixels().Slice(0, Length)));
+        // Only the base level is read, and it is converted straight into the canvas.
+        Canvas Result;
+        Result.mWidth  = Source.GetWidth();
+        Result.mHeight = Source.GetHeight();
+        Result.mPixels = Blob::Allocate<Byte>(ZyGraphic::GetLevelSize(kFormat, Result.mWidth, Result.mHeight, 0));
 
-        const Bitmap Floats = Transcoder::Transcode(Move(Level), kFormat);
+        const UInt32    Texels = static_cast<UInt32>(Result.mWidth) * Result.mHeight;
+        const Ptr<Byte> Target = Result.mPixels.GetData<Byte>();
 
-        if (Floats.GetPixels().IsEmpty())
+        if (!Transcoder::Convert(Source.GetPixels().GetData(), Source.GetFormat(), Target, kFormat, Texels))
         {
             return Canvas();
         }
-
-        Canvas Result;
-        Result.mWidth  = Floats.GetWidth();
-        Result.mHeight = Floats.GetHeight();
-        Result.mPixels = Blob::Copy(Floats.GetPixels());
         return Result;
     }
 }

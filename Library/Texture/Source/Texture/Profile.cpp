@@ -61,6 +61,9 @@ namespace Studio::Texture
         Profile Result;
         Result.Format   = Environment.GetEnum<ZyGraphic::TextureFormat>("format", Result.Format);
         Result.Mipmaps  = Environment.GetBool("mipmaps",    Result.Mipmaps);
+        Result.Opacity  = Environment.GetBool("transparent", Result.Opacity);
+        Result.Cutoff   = Environment.GetNumber<Real32>("cutoff", Result.Cutoff);
+        Result.Normal   = Environment.GetBool("normal",     Result.Normal);
         Result.Linear   = Environment.GetBool("linear",     Result.Linear);
         Result.Compress = Environment.GetBool("compressed", Result.Compress);
         Result.Layered  = Environment.GetBool("layered",    Result.Layered);

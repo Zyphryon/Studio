@@ -30,7 +30,7 @@ namespace Studio::Texture
         {
             return Move(Source);
         }
-        return Canvas::From(Resampler::Resize(Source.To(Canvas::kFormat), Width, Height));
+        return Resampler::Resize(Source, Width, Height);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -38,6 +38,12 @@ namespace Studio::Texture
 
     static Canvas Crop(ConstRef<Bitmap> Source, ConstRef<Area> From)
     {
+        // A region with no crop of its own takes the whole source, however large it is now.
+        if (!From.IsValid())
+        {
+            return Canvas::From(Source);
+        }
+
         const UInt32 Texel = ZyGraphic::GetTextureMetadata(Source.GetFormat()).BitsPerPixel / 8;
         const UInt32 Pitch = Source.GetWidth() * Texel;
         const UInt32 Row   = From.Width * Texel;
@@ -68,6 +74,52 @@ namespace Studio::Texture
                 Kept[Written] = Taken[Read];
 
                 Target.Set(X, Y, Color(Kept[0], Kept[1], Kept[2], Kept[3]));
+            }
+        }
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static void Bleed(Ref<Canvas> Page, UInt32 Left, UInt32 Top, UInt32 Right, UInt32 Bottom)
+    {
+        const UInt32 Width = Right - Left;
+
+        Sequence<Bool>   Reached;
+        Sequence<UInt32> Queue;
+        Reached.Fill(false, static_cast<UInt>(Width) * (Bottom - Top));
+
+        for (UInt32 Y = Top; Y < Bottom; ++Y)
+        {
+            for (UInt32 X = Left; X < Right; ++X)
+            {
+                if (Page.Get(X, Y).GetAlpha() > 0.0f)
+                {
+                    Reached[(Y - Top) * Width + (X - Left)] = true;
+                    Queue.Append((Y - Top) * Width + (X - Left));
+                }
+            }
+        }
+
+        // A walk outward from every texel that shows reaches each unseen one first from the nearest that shows.
+        for (UInt Next = 0; Next < Queue.GetSize(); ++Next)
+        {
+            const UInt32 FromX = Queue[Next] % Width;
+            const UInt32 FromY = Queue[Next] / Width;
+            const Color  From  = Page.Get(Left + FromX, Top + FromY);
+
+            for (UInt32 Y = (FromY > 0 ? FromY - 1 : 0); Y <= FromY + 1 && Top + Y < Bottom; ++Y)
+            {
+                for (UInt32 X = (FromX > 0 ? FromX - 1 : 0); X <= FromX + 1 && Left + X < Right; ++X)
+                {
+                    if (!Reached[Y * Width + X])
+                    {
+                        Reached[Y * Width + X] = true;
+                        Queue.Append(Y * Width + X);
+
+                        Page.Set(Left + X, Top + Y, Color(From.GetRed(), From.GetGreen(), From.GetBlue(), 0.0f));
+                    }
+                }
             }
         }
     }
@@ -107,20 +159,17 @@ namespace Studio::Texture
 
             ConstRef<Bitmap> Layer = Source->Slices[Entry.Layer];
 
-            if (!Entry.From.IsValid())
-            {
-                Entry.From = Area(0, 0, Layer.GetWidth(), Layer.GetHeight());
-            }
+            // A region with no crop is measured from its source each time and keeps no crop it was never given.
+            const Area Taken = Entry.From.IsValid() ? Entry.From : Area(0, 0, Layer.GetWidth(), Layer.GetHeight());
 
-            if (   Entry.From.X + Entry.From.Width  > Layer.GetWidth()
-                || Entry.From.Y + Entry.From.Height > Layer.GetHeight())
+            if (Taken.X + Taken.Width > Layer.GetWidth() || Taken.Y + Taken.Height > Layer.GetHeight())
             {
                 LOG_E("Texture: '{0}' takes {1}x{2} at {3},{4}, which leaves its {5}x{6} source",
                     Entry.Name,
-                    Entry.From.Width,
-                    Entry.From.Height,
-                    Entry.From.X,
-                    Entry.From.Y,
+                    Taken.Width,
+                    Taken.Height,
+                    Taken.X,
+                    Taken.Y,
                     Layer.GetWidth(),
                     Layer.GetHeight());
 
@@ -129,8 +178,8 @@ namespace Studio::Texture
 
             if (!Entry.Rect.IsValid())
             {
-                Entry.Rect.Width  = Entry.From.Width;
-                Entry.Rect.Height = Entry.From.Height;
+                Entry.Rect.Width  = Taken.Width;
+                Entry.Rect.Height = Taken.Height;
             }
 
             for (ConstRef<Splice> Graft : Entry.Channels)
@@ -264,6 +313,18 @@ namespace Studio::Texture
                     }
                 }
             }
+
+            // A filter mixes the colour of an unseen texel into the edge, so each takes the nearest shown texel's.
+            if (mProfile.Opacity)
+            {
+                const SInt32 Margin = Reach + Atlas.Padding;
+
+                Bleed(Page,
+                    Max(Place.X - Reach, 0),
+                    Max(Place.Y - Reach, 0),
+                    Min(Place.X + Place.Width  + Margin, static_cast<SInt32>(Atlas.Width)),
+                    Min(Place.Y + Place.Height + Margin, static_cast<SInt32>(Atlas.Height)));
+            }
         }
 
         Output.Clear();
@@ -355,30 +416,34 @@ namespace Studio::Texture
 
     ConstPtr<Surface> Composer::Fetch(Text Source, Bool Data)
     {
-        Ref<Table<Str, Surface>> Cache = Data ? mData : mSources;
+        // A channel holds plain numbers such as a height, read apart whenever colour takes a curve or a format.
+        const Bool Apart = Data && (!mProfile.Linear || mProfile.Format != ZyGraphic::TextureFormat::Unspecified);
 
-        if (const ConstPtr<Surface> Found = Cache.Find(Source))
+        Ref<Table<Str, Surface>> Cache = Apart ? mData : mSources;
+
+        ConstPtr<Surface> Found = Cache.Find(Source);
+
+        if (Found == nullptr)
         {
-            return Found;
-        }
+            Profile Settings = mProfile;
+            Settings.Linear |= Data;
+            Settings.Format  = Data ? ZyGraphic::TextureFormat::Unspecified : Settings.Format;
 
-        // A channel holds data such as a height, so it is never read through the sRGB curve.
-        Profile Settings = mProfile;
-        Settings.Linear |= Data;
+            Surface Decoded = mBaker.Load(Tracker::Resolve(mFolder, Source), Settings);
 
-        Surface Decoded = mBaker.Load(Tracker::Resolve(mFolder, Source), Settings);
+            if (!Decoded.IsValid())
+            {
+                return nullptr;
+            }
 
-        if (!Decoded.IsValid())
-        {
-            return nullptr;
+            Cache.Assign(Str(Source), Move(Decoded));
+            Found = Cache.Find(Source);
         }
 
         if (!Data && mFirst == ZyGraphic::TextureFormat::Unspecified)
         {
-            mFirst = Decoded.Slices.GetFront().GetFormat();
+            mFirst = Found->Slices.GetFront().GetFormat();
         }
-
-        Cache.Assign(Str(Source), Move(Decoded));
-        return Cache.Find(Source);
+        return Found;
     }
 }

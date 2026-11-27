@@ -67,6 +67,14 @@ namespace Studio::Texture
             return mHeight;
         }
 
+        /// \brief Gets the pixels as read-only bytes.
+        ///
+        /// \return The bytes of the canvas, four floats a pixel row after row, empty if it holds none.
+        ZY_INLINE ConstSpan<Byte> GetPixels() const
+        {
+            return mPixels;
+        }
+
         /// \brief Reads one pixel.
         ///
         /// \param X The column, from the left edge.

@@ -40,10 +40,15 @@ namespace Studio::Texture
 
         /// \brief Packs every level of a bitmap into a block-compressed format, four by four texels per block.
         ///
-        /// \param Scheduler The scheduler each level's rows of blocks are spread over.
+        /// \param Scheduler The scheduler the blocks of every level are spread over.
         /// \param Source    The bitmap to pack, in the format \ref GetSource names for \p Format.
         /// \param Format    The block-compressed format to produce.
         /// \return The bitmap in \p Format, or an empty one on failure.
         static Bitmap Encode(Ref<ZyJob::Service> Scheduler, ConstRef<Bitmap> Source, ZyGraphic::TextureFormat Format);
+
+    private:
+
+        /// \brief The most levels a chain holds, one per bit of a 16-bit extent.
+        static constexpr UInt32 kLevels = 16;
     };
 }

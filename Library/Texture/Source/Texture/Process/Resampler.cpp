@@ -12,6 +12,8 @@
 
 #include "Resampler.hpp"
 #include "Texture/Image/Texel.hpp"
+#include "Texture/Process/Transcoder.hpp"
+#include <Zyphryon.Math/Vector3.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -22,34 +24,150 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    template<typename Type, Bool sRGB>
-    static void Process(
-        ConstPtr<Byte> Source, UInt32 SourceWidth, UInt32 SourceHeight,
-        Ptr<Byte>      Target, UInt32 TargetWidth, UInt32 TargetHeight, UInt32 Channels)
+    static void Filter(ConstRef<Canvas> Source, Ref<Canvas> Target, UInt32 Y, Bool Opacity, Bool Normal, Bool Flat)
     {
-        for (UInt32 Y = 0; Y < TargetHeight; ++Y)
+        const UInt32 SourceWidth  = Source.GetWidth();
+        const UInt32 SourceHeight = Source.GetHeight();
+        const UInt32 TargetWidth  = Target.GetWidth();
+        const UInt32 TargetHeight = Target.GetHeight();
+
+        // Spans are counted in parts of a source texel, so an edge texel weighs exactly the share a target covers.
+        const UInt32 Top    = Y * SourceHeight;
+        const UInt32 Bottom = Top + SourceHeight;
+
+        for (UInt32 X = 0; X < TargetWidth; ++X)
         {
-            const UInt32 MinY = Y * SourceHeight / TargetHeight;
-            const UInt32 MaxY = Max<UInt32>((Y + 1) * SourceHeight / TargetHeight, MinY + 1);
+            const UInt32 Left  = X * SourceWidth;
+            const UInt32 Right = Left + SourceWidth;
 
-            for (UInt32 X = 0; X < TargetWidth; ++X)
+            Color  Total(0.0f, 0.0f, 0.0f, 0.0f);
+            Color  Tinted(0.0f, 0.0f, 0.0f, 0.0f);
+            Real32 Weight = 0.0f;
+
+            for (UInt32 Row = Top / TargetHeight; Row * TargetHeight < Bottom; ++Row)
             {
-                const UInt32 MinX = X * SourceWidth / TargetWidth;
-                const UInt32 MaxX = Max<UInt32>((X + 1) * SourceWidth / TargetWidth, MinX + 1);
+                const UInt32 Down = Min((Row + 1) * TargetHeight, Bottom) - Max(Row * TargetHeight, Top);
+                const Real32 Tall = static_cast<Real32>(Down) / static_cast<Real32>(SourceHeight);
 
-                Color  Total(0.0f, 0.0f, 0.0f, 0.0f);
-                UInt32 Count = 0;
-
-                for (UInt32 Row = MinY; Row < MaxY; ++Row)
+                for (UInt32 Column = Left / TargetWidth; Column * TargetWidth < Right; ++Column)
                 {
-                    for (UInt32 Column = MinX; Column < MaxX; ++Column)
+                    const UInt32 Across = Min((Column + 1) * TargetWidth, Right) - Max(Column * TargetWidth, Left);
+                    const Real32 Share  = Tall * (static_cast<Real32>(Across) / static_cast<Real32>(SourceWidth));
+
+                    Color Texel = Source.Get(Column, Row);
+
+                    // A format that keeps no Z leaves the shader to rebuild it, so the filter rebuilds it the same way.
+                    if (Flat)
                     {
-                        Total += Load<Type, sRGB>(Source, Row * SourceWidth + Column, Channels);
-                        ++Count;
+                        const Real32 NX = Texel.GetRed()   * 2.0f - 1.0f;
+                        const Real32 NY = Texel.GetGreen() * 2.0f - 1.0f;
+                        const Real32 NZ = Sqrt(Max(1.0f - NX * NX - NY * NY, 0.0f));
+
+                        Texel = Color(Texel.GetRed(), Texel.GetGreen(), NZ * 0.5f + 0.5f, Texel.GetAlpha());
+                    }
+
+                    Total  += Texel * Share;
+                    Weight += Share;
+
+                    if (Opacity)
+                    {
+                        Tinted += Texel * (Share * Texel.GetAlpha());
                     }
                 }
+            }
 
-                Store<Type, sRGB>(Target, Y * TargetWidth + X, Channels, Total * (1.0f / static_cast<Real32>(Count)));
+            Color Value = Total * (1.0f / Weight);
+
+            // Colour weighed by alpha keeps what see-through texels hold out of the visible ones beside them.
+            if (Opacity && Total.GetAlpha() > 0.0f)
+            {
+                Value = Color::WithAlpha(Tinted * (1.0f / Total.GetAlpha()), Value.GetAlpha());
+            }
+
+            // An averaged normal comes out shorter than a unit one, so it is lengthened back before it is stored.
+            if (Normal)
+            {
+                const Vector3 Encoded(Value.GetRed(), Value.GetGreen(), Value.GetBlue());
+                const Vector3 Direction = Encoded * 2.0f - Vector3(1.0f);
+
+                if (!IsAlmostZero(Direction.GetLength()))
+                {
+                    const Vector3 Unit = Vector3::Normalize(Direction) * 0.5f + Vector3(0.5f);
+
+                    Value = Color(Unit.GetX(), Unit.GetY(), Unit.GetZ(), Value.GetAlpha());
+                }
+            }
+
+            Target.Set(X, Y, Value);
+        }
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static Real32 Cover(ConstRef<Canvas> Level, Real32 Cutoff)
+    {
+        const UInt32 Count  = static_cast<UInt32>(Level.GetWidth()) * Level.GetHeight();
+        UInt32       Passed = 0;
+
+        for (UInt32 Y = 0; Y < Level.GetHeight(); ++Y)
+        {
+            for (UInt32 X = 0; X < Level.GetWidth(); ++X)
+            {
+                Passed += (Level.Get(X, Y).GetAlpha() >= Cutoff) ? 1 : 0;
+            }
+        }
+        return static_cast<Real32>(Passed) / static_cast<Real32>(Count);
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    static void Keep(Ref<Canvas> Level, Real32 Cutoff, Real32 Coverage)
+    {
+        // Alphas are counted once by step, so the texels any cut lets through are a running total over the steps.
+        constexpr UInt32 kSteps = 1024;
+
+        Array<UInt32, kSteps + 1> Counts { };
+
+        for (UInt32 Y = 0; Y < Level.GetHeight(); ++Y)
+        {
+            for (UInt32 X = 0; X < Level.GetWidth(); ++X)
+            {
+                ++Counts[static_cast<UInt32>(Clamp(Level.Get(X, Y).GetAlpha(), 0.0f, 1.0f) * kSteps)];
+            }
+        }
+
+        // The cut whose share lands nearest the base level's is taken from the middle of the steps that tie for it.
+        const SInt64 Wanted = static_cast<SInt64>(Coverage * Level.GetWidth() * Level.GetHeight());
+
+        SInt64 Passed = 0;
+        SInt64 Least  = kMaximum<SInt64>;
+        UInt32 First  = kSteps;
+        UInt32 Last   = kSteps;
+
+        for (UInt32 Step = kSteps; Step > 0; --Step)
+        {
+            Passed += Counts[Step];
+
+            if (const SInt64 Gap = Abs(Passed - Wanted); Gap <= Least)
+            {
+                First = (Gap < Least) ? Step : First;
+                Last  = Step;
+                Least = Gap;
+            }
+        }
+
+        // Alpha is scaled so that cut lands on the real one, which then lets the same share of texels through.
+        const Real32 Scale = Cutoff * kSteps * 2.0f / static_cast<Real32>(First + Last);
+
+        for (UInt32 Y = 0; Y < Level.GetHeight(); ++Y)
+        {
+            for (UInt32 X = 0; X < Level.GetWidth(); ++X)
+            {
+                const Color Texel = Level.Get(X, Y);
+
+                Level.Set(X, Y, Color::WithAlpha(Texel, Min(Texel.GetAlpha() * Scale, 1.0f)));
             }
         }
     }
@@ -57,105 +175,108 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static auto Pick(ConstRef<ZyGraphic::TextureMetadata> Format)
+    Canvas Resampler::Resize(ConstRef<Canvas> Source, UInt16 Width, UInt16 Height)
     {
-        const auto Select = []<typename Type>(UInt32 Index)
-        {
-            using Return = void (*)(ConstPtr<Byte>, UInt32, UInt32, Ptr<Byte>, UInt32, UInt32, UInt32);
-
-            static constexpr Return kTable[] =
-            {
-                Process<Type, false>, Process<Type, true>,
-            };
-            return kTable[Index];
-        };
-
-        return Dispatch(GetComponent(Format), Select, Format.IsSRGB ? 1 : 0);
-    }
-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-    Bitmap Resampler::Resize(ConstRef<Bitmap> Source, UInt16 Width, UInt16 Height)
-    {
-        const ZyGraphic::TextureFormat   Format   = Source.GetFormat();
-        const ZyGraphic::TextureMetadata Metadata = ZyGraphic::GetTextureMetadata(Format);
-
-        if (!IsInterleaved(Metadata))
-        {
-            LOG_E("Texture: '{0}' must have its texels unpacked before it can be filtered", ZyEnum::GetName(Format));
-
-            return Bitmap();
-        }
-
-        if (Width == 0 || Height == 0 || Source.GetWidth() == 0 || Source.GetHeight() == 0)
+        if (!Source.IsValid() || Width == 0 || Height == 0)
         {
             LOG_E("Texture: neither end of a filter can be empty");
 
-            return Bitmap();
+            return Canvas();
         }
 
-        Blob Output = Blob::Allocate<Byte>(ZyGraphic::GetLevelSize(Format, Width, Height, 0));
+        Canvas Result(Width, Height);
 
-        if (Source.GetWidth() == Width && Source.GetHeight() == Height)
+        for (UInt32 Row = 0; Row < Height; ++Row)
         {
-            Copy(Output.GetData<Byte>(), Output.GetSize(), Source.GetPixels().GetData());
+            Filter(Source, Result, Row, false, false, false);
         }
-        else
-        {
-            Pick(Metadata)(
-                Source.GetPixels().GetData(), Source.GetWidth(), Source.GetHeight(),
-                Output.GetData<Byte>(), Width, Height, Metadata.Components);
-        }
-        return Bitmap(Format, Width, Height, 1, Move(Output));
+        return Result;
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Bitmap Resampler::Mipmap(AnyRef<Bitmap> Source, UInt8 Levels)
+    Bitmap Resampler::Mipmap(
+        Ref<ZyJob::Service>      Scheduler,
+        AnyRef<Bitmap>           Source,
+        UInt8                    Levels,
+        ZyGraphic::TextureFormat Format,
+        ConstRef<Profile>        Profile)
     {
-        const ZyGraphic::TextureFormat   Format   = Source.GetFormat();
-        const ZyGraphic::TextureMetadata Metadata = ZyGraphic::GetTextureMetadata(Format);
-
-        if (!IsInterleaved(Metadata))
-        {
-            LOG_E("Texture: '{0}' must have its texels unpacked before it can be filtered", ZyEnum::GetName(Format));
-
-            return Bitmap();
-        }
-
         const UInt16 Width  = Source.GetWidth();
         const UInt16 Height = Source.GetHeight();
 
         ZY_ASSERT(Source.GetLevels() == 1, "A chain can only be built from a single level");
         ZY_ASSERT(Levels <= ZyGraphic::GetLevelCount(Width, Height), "More levels than the extent can halve into");
 
-        // With nothing to filter, the bitmap is handed back as it is rather than copied.
+        // With nothing to filter, the base level is converted on its own, or handed back when it is already in format.
         if (Levels <= 1)
         {
-            return Move(Source);
+            return Transcoder::Transcode(Move(Source), Format);
         }
+
+        const ZyGraphic::TextureMetadata Metadata = ZyGraphic::GetTextureMetadata(Format);
+
+        if (!IsInterleaved(Metadata))
+        {
+            LOG_E("Texture: '{0}' cannot be written as interleaved components", ZyEnum::GetName(Format));
+
+            return Bitmap();
+        }
+
+        // Each level is filtered from the one above it in linear floats, so it is rounded to the format only once.
+        Canvas Level = Canvas::From(Source);
+
+        if (!Level.IsValid())
+        {
+            return Bitmap();
+        }
+
+        const Bool   Flat     = Profile.Normal && Metadata.Components < 3;
+        const Real32 Coverage = (Profile.Cutoff > 0.0f) ? Cover(Level, Profile.Cutoff) : 0.0f;
+        const UInt32 Stride   = Metadata.BitsPerPixel / 8;
 
         Blob Output = Blob::Allocate<Byte>(ZyGraphic::GetLevelOffset(Format, Width, Height, Levels));
 
-        const Ptr<Byte> Target = Output.GetData<Byte>();
-
-        // The base level is copied as it is, and each later level is averaged down from the one above it.
-        Copy(Target, ZyGraphic::GetLevelSize(Format, Width, Height, 0), Source.GetPixels().GetData());
-
-        const auto Process = Pick(Metadata);
-
-        for (UInt8 Level = 1; Level < Levels; ++Level)
+        for (UInt8 Step = 0; Step < Levels; ++Step)
         {
-            Process(
-                Target + ZyGraphic::GetLevelOffset(Format, Width, Height, Level - 1),
-                ZyGraphic::GetLevelExtent(Width,  Level - 1),
-                ZyGraphic::GetLevelExtent(Height, Level - 1),
-                Target + ZyGraphic::GetLevelOffset(Format, Width, Height, Level),
-                ZyGraphic::GetLevelExtent(Width,  Level),
-                ZyGraphic::GetLevelExtent(Height, Level),
-                Metadata.Components);
+            if (Step > 0)
+            {
+                Canvas Next(
+                    static_cast<UInt16>(ZyGraphic::GetLevelExtent(Width,  Step)),
+                    static_cast<UInt16>(ZyGraphic::GetLevelExtent(Height, Step)));
+
+                Scheduler.Parallel(ZyJob::Lane::Compute, Next.GetHeight(), [&](UInt32 First, UInt32 Last)
+                {
+                    for (UInt32 Row = First; Row < Last; ++Row)
+                    {
+                        Filter(Level, Next, Row, Profile.Opacity, Profile.Normal, Flat);
+                    }
+                });
+
+                Level = Move(Next);
+
+                if (Profile.Cutoff > 0.0f)
+                {
+                    Keep(Level, Profile.Cutoff, Coverage);
+                }
+            }
+
+            const UInt32         Offset = ZyGraphic::GetLevelOffset(Format, Width, Height, Step);
+            const ConstPtr<Byte> Pixels = Level.GetPixels().GetData();
+            const Ptr<Byte>      Target = Output.GetData<Byte>() + Offset;
+            const UInt32         Across = Level.GetWidth();
+
+            // Rows are converted straight into their place in the chain.
+            Scheduler.Parallel(ZyJob::Lane::Compute, Level.GetHeight(), [&](UInt32 First, UInt32 Last)
+            {
+                Transcoder::Convert(
+                    Pixels + static_cast<UInt64>(First) * Across * sizeof(Real32) * 4,
+                    Canvas::kFormat,
+                    Target + static_cast<UInt64>(First) * Across * Stride,
+                    Format,
+                    (Last - First) * Across);
+            });
         }
         return Bitmap(Format, Width, Height, Levels, Move(Output));
     }
