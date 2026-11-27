@@ -27,6 +27,7 @@ namespace Studio::Sound
         Result.Encoding = Environment.GetEnum<ZyAudio::Encoding>("encoding", Result.Encoding);
         Result.Bitrate  = Environment.GetNumber<SInt32>("bitrate",           Result.Bitrate);
         Result.Compress = Environment.GetBool("compressed",                  Result.Compress);
+        Result.Loop     = Environment.GetBool("loop",                        Result.Loop);
         return Result;
     }
 }

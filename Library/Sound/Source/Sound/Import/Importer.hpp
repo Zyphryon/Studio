@@ -45,5 +45,25 @@ namespace Studio::Sound
         /// \param Type   The source extension.
         /// \return The decoded sample, or an empty sample on failure.
         static Sample Import(ConstSpan<Byte> Source, Text Type);
+
+    private:
+
+        /// \brief The zero crossings the resampling kernel spans on each side of its centre.
+        static constexpr Real64 kCrossings = 64.0;
+
+        /// \brief The shape of the Kaiser window over the kernel, which holds its stopband about 100 dB down.
+        static constexpr Real64 kBeta      = 10.0;
+
+        /// \brief The cutoff of the kernel, as a share of the lower of the source's and the mixer's Nyquist rates.
+        static constexpr Real64 kBandwidth = 0.95;
+
+        /// \brief Converts decoded frames to the mixer's rate through a Kaiser-windowed sinc filter.
+        ///
+        /// \param Samples   The interleaved frames, moved through untouched when already at the mixer's rate.
+        /// \param Frequency The rate the frames are clocked at, in hertz.
+        /// \param Stride    The number of channels in a frame, refused above the mixer's.
+        /// \param Frames    The number of frames, read as silence past both ends.
+        /// \return The sample at the mixer's rate, or an empty sample for a layout the mixer cannot play.
+        static Sample Resample(AnyRef<Blob> Samples, UInt32 Frequency, UInt16 Stride, UInt64 Frames);
     };
 }

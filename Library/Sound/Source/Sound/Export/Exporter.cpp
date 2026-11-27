@@ -12,6 +12,7 @@
 
 #include "Exporter.hpp"
 #include <Zyphryon.Audio/Decoder/Adaptive.hpp>
+#include <Zyphryon.Math/Random.hpp>
 #include <opus.h>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -23,6 +24,21 @@ namespace Studio::Sound
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+    static SInt16 Quantize(Ptr<Random> Dither, Real32 Value)
+    {
+        // The scale is the decoders' own, and a value already on the 16-bit grid is kept rather than dithered.
+        Real32 Level = Value * 32768.0f;
+
+        if (Dither != nullptr && Level != Round(Level))
+        {
+            Level += Dither->NextReal<Real32>() - Dither->NextReal<Real32>();
+        }
+        return static_cast<SInt16>(Clamp(Round(Level), -32768.0f, 32767.0f));
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
     static Blob EncodeLinear(ConstRef<Sample> Source)
     {
         const ConstSpan<Real32> Samples = Source.GetSamples();
@@ -30,9 +46,12 @@ namespace Studio::Sound
         Blob              Payload = Blob::Allocate<SInt16>(Samples.GetSize());
         const Ptr<SInt16> Output  = Payload.GetData<SInt16>();
 
+        // The dither starts from the same seed on every bake, so a source always bakes to the same bytes.
+        Random Dither;
+
         for (UInt Index = 0; Index < Samples.GetSize(); ++Index)
         {
-            Output[Index] = EncodeNormalized<SInt16>(Samples[Index]);
+            Output[Index] = Quantize(AddressOf(Dither), Samples[Index]);
         }
         return Payload;
     }
@@ -71,7 +90,8 @@ namespace Studio::Sound
                 const Ptr<Byte>        Cursor = Output + (Block * Stride + Channel) * kBlockStride;
                 Ref<Adaptive::Channel> State  = States[Channel];
 
-                State.Predictor = EncodeNormalized<SInt16>(Samples[Origin * Stride + Channel]);
+                // No dither, whose single step the codec's own far coarser ones would swallow.
+                State.Predictor = Quantize(nullptr, Samples[Origin * Stride + Channel]);
 
                 Cursor[0] = static_cast<Byte>(State.Predictor & 0xFF);
                 Cursor[1] = static_cast<Byte>((State.Predictor >> 8) & 0xFF);
@@ -82,7 +102,7 @@ namespace Studio::Sound
 
                 for (UInt64 Frame = 1; Frame < Length; ++Frame)
                 {
-                    const SInt16 Value  = EncodeNormalized<SInt16>(Samples[(Origin + Frame) * Stride + Channel]);
+                    const SInt16 Value  = Quantize(nullptr, Samples[(Origin + Frame) * Stride + Channel]);
                     const UInt8  Nibble = Adaptive::Compress(State, Value);
                     const UInt64 Slot   = 4 + ((Frame - 1) >> 1);
 
@@ -97,7 +117,7 @@ namespace Studio::Sound
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Blob EncodeOpus(ConstRef<Sample> Source, SInt32 Bitrate)
+    static Blob EncodeOpus(ConstRef<Sample> Source, ConstRef<Profile> Profile)
     {
         constexpr UInt32 kPacketFrames = 960;
         constexpr UInt32 kPacketBytes  = 4000;
@@ -115,17 +135,31 @@ namespace Studio::Sound
             return Blob();
         }
 
-        ::opus_encoder_ctl(Encoder, OPUS_SET_BITRATE(Bitrate));
+        if (::opus_encoder_ctl(Encoder, OPUS_SET_BITRATE(Profile.Bitrate)) != OPUS_OK)
+        {
+            LOG_E("Sound: the Opus encoder refused a bitrate of {0} bits per second", Profile.Bitrate);
 
-        // The decoder has to discard exactly the encoder's lookahead, so it is stored as the pre-skip.
+            ::opus_encoder_destroy(Encoder);
+            return Blob();
+        }
+
+        // A file has no buffer to stay within, so the rate is left free per packet and the search runs at its finest.
+        ::opus_encoder_ctl(Encoder, OPUS_SET_COMPLEXITY(10));
+        ::opus_encoder_ctl(Encoder, OPUS_SET_VBR_CONSTRAINT(0));
+
+        // The decoder discards the encoder's lookahead and a loop's prime, so their sum is stored as the pre-skip.
         opus_int32 Lookahead = 0;
         ::opus_encoder_ctl(Encoder, OPUS_GET_LOOKAHEAD(AddressOf(Lookahead)));
 
         const ConstSpan<Real32> Samples = Source.GetSamples();
         const UInt64            Frames  = Source.GetFrames();
 
-        // Encoding one lookahead's worth of silence past the end flushes the tail, so the last frames survive.
-        const UInt64 Total   = Frames + static_cast<UInt64>(Lookahead);
+        // A loop is primed with its own tail inside the first packet's pre-skip, so the codec sees no edge at its seam.
+        const UInt64 Prime = (Profile.Loop ? kPacketFrames - 1 - static_cast<UInt64>(Lookahead) : 0);
+        const UInt64 Shift = Frames - Prime % Frames;
+
+        // Encoding one lookahead's worth past the end flushes the tail, so the last frames survive.
+        const UInt64 Total   = Prime + Frames + static_cast<UInt64>(Lookahead);
         const UInt64 Packets = (Total + kPacketFrames - 1) / kPacketFrames;
 
         Sequence<UInt16> Lengths(Packets);
@@ -139,13 +173,25 @@ namespace Studio::Sound
         {
             const UInt64 Origin = Index * kPacketFrames;
 
-            // Opus only takes whole frames, so the last packet is padded with silence rather than cut short.
-            Zero(Input, kPacketFrames * Stride);
-
-            if (Origin < Frames)
+            if (Profile.Loop)
             {
-                const UInt64 Length = Min<UInt64>(kPacketFrames, Frames - Origin);
-                Copy(Input, Length * Stride, Samples.GetData() + Origin * Stride);
+                // A loop reads its frames round and round, so the frames before its start and past its end are its own.
+                for (UInt64 Frame = 0; Frame < kPacketFrames; ++Frame)
+                {
+                    const UInt64 Read = (Origin + Frame + Shift) % Frames;
+                    Copy(Input + Frame * Stride, Stride, Samples.GetData() + Read * Stride);
+                }
+            }
+            else
+            {
+                // Opus only takes whole frames, so the last packet is padded with silence rather than cut short.
+                Zero(Input, kPacketFrames * Stride);
+
+                if (Origin < Frames)
+                {
+                    const UInt64 Length = Min<UInt64>(kPacketFrames, Frames - Origin);
+                    Copy(Input, Length * Stride, Samples.GetData() + Origin * Stride);
+                }
             }
 
             const SInt32 Written
@@ -169,7 +215,7 @@ namespace Studio::Sound
 
         // The directory comes before the packets, so a seek can find its packet without walking the others.
         Writer Output(static_cast<UInt32>(Body.GetSize() + Lengths.GetSize() * sizeof(UInt16) + 16));
-        Output.Write<UInt16>(static_cast<UInt16>(Lookahead));
+        Output.Write<UInt16>(static_cast<UInt16>(Lookahead + Prime));
         Output.Write<UInt16>(kPacketFrames);
         Output.Write<UInt32>(static_cast<UInt32>(Lengths.GetSize()));
 
@@ -202,6 +248,13 @@ namespace Studio::Sound
             return Blob();
         }
 
+        if (Source.GetFrequency() != ZyAudio::kMixerFrequency)
+        {
+            LOG_E("Sound: a sample at {0} Hz is not at the mixer's rate", Source.GetFrequency());
+
+            return Blob();
+        }
+
         Blob Payload;
 
         switch (Profile.Encoding)
@@ -210,7 +263,7 @@ namespace Studio::Sound
             Payload = EncodeAdaptive(Source);
             break;
         case ZyAudio::Encoding::Opus:
-            Payload = EncodeOpus(Source, Profile.Bitrate);
+            Payload = EncodeOpus(Source, Profile);
             break;
         case ZyAudio::Encoding::Linear:
             Payload = EncodeLinear(Source);

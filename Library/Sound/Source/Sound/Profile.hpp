@@ -32,6 +32,9 @@ namespace Studio::Sound
         /// `true` to LZ4-compress the payload when that comes out smaller, `false` to store it as it is.
         Bool              Compress = true;
 
+        /// `true` to prime an Opus sound with its own tail so it loops without a click, `false` to pad it with silence.
+        Bool              Loop     = false;
+
         /// \brief Reads the settings from a command line, keeping the default of any switch left out.
         ///
         /// \param Environment The parsed switches.
