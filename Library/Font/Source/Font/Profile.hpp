@@ -38,7 +38,7 @@ namespace Studio::Font
         /// The total vertical space an underline takes, in em units.
         Real32             Underline = 1.2f;
 
-        /// The index of the typeface to read out of a collection.
+        /// The index of the main typeface to read out of a collection, every fallback being read at its first.
         UInt32             Face      = 0;
 
         /// The gap left between neighbouring glyphs in the atlas, in texels.

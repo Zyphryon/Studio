@@ -14,7 +14,6 @@
 
 #include "Font/Export/Exporter.hpp"
 #include "Font/Import/Importer.hpp"
-#include <Zyphryon.Job/Service.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -54,7 +53,7 @@ namespace Studio::Font
 
         /// \brief Constructs a baker.
         ///
-        /// \param Scheduler The pool the glyphs are generated on.
+        /// \param Scheduler The pool the glyphs are kerned and generated on.
         explicit Baker(Ref<ZyJob::Service> Scheduler);
 
         /// \brief Bakes several typefaces into one font, the first to carry a codepoint giving it.

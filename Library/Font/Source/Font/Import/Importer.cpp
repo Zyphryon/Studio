@@ -25,7 +25,7 @@ namespace Studio::Font
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    static Typeface::Metrics ReadMetrics(Ref<stbtt_fontinfo> Info, UInt Size)
+    static void ReadMetrics(Ref<stbtt_fontinfo> Info, UInt Size, Ref<ZyRender::Font::Metrics> Result)
     {
         const Real32 Normalize = stbtt_ScaleForMappingEmToPixels(AddressOf(Info), 1.0f);
 
@@ -34,7 +34,6 @@ namespace Studio::Font
         int LineGap = 0;
         stbtt_GetFontVMetrics(AddressOf(Info), &Ascent, &Descent, &LineGap);
 
-        Typeface::Metrics Result;
         Result.Ascender           = static_cast<Real32>(Ascent)  * Normalize;
         Result.Descender          = static_cast<Real32>(Descent) * Normalize;
         Result.UnderlineOffset    = -0.1f;
@@ -54,7 +53,6 @@ namespace Studio::Font
                 Result.UnderlineThickness = static_cast<Real32>(Thickness) * Normalize;
             }
         }
-        return Result;
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -95,6 +93,12 @@ namespace Studio::Font
             ConstRef<stbtt_vertex> Vertex  = Vertices[Step];
             const Vector2          Target  = Vector2(Vertex.x, Vertex.y)   * Scale;
             const Vector2          Control = Vector2(Vertex.cx, Vertex.cy) * Scale;
+
+            // A line or curve that ends where it starts is left out, as the field generator's own importer leaves it.
+            if (Target == Cursor && (Vertex.type == STBTT_vline || Vertex.type == STBTT_vcurve))
+            {
+                continue;
+            }
 
             switch (Vertex.type)
             {
@@ -139,13 +143,18 @@ namespace Studio::Font
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Typeface Importer::Import(ConstSpan<Byte> Source, ConstRef<Profile> Profile)
+    void Importer::Import(
+        Ref<ZyJob::Service>      Scheduler,
+        ConstSpan<Byte>          Source,
+        ConstRef<Profile>        Profile,
+        Ref<Table<UInt32, Bool>> Claimed,
+        Ref<Typeface>            Output)
     {
         if (Source.GetSize() < 12)
         {
             LOG_E("Font: the source is too small to be a typeface");
 
-            return Typeface();
+            return;
         }
 
         const ConstPtr<unsigned char> Bytes = Source.GetData();
@@ -155,7 +164,7 @@ namespace Studio::Font
         {
             LOG_E("Font: the source holds {0} typeface(s), so index {1} does not exist", Faces, Profile.Face);
 
-            return Typeface();
+            return;
         }
 
         const int Offset = stbtt_GetFontOffsetForIndex(Bytes, static_cast<int>(Profile.Face));
@@ -166,19 +175,15 @@ namespace Studio::Font
         {
             LOG_E("Font: the source is not a readable TrueType or OpenType typeface");
 
-            return Typeface();
+            return;
         }
 
         const Real32 Normalize = stbtt_ScaleForMappingEmToPixels(&Info, 1.0f);
         const Real32 Scale     = stbtt_ScaleForMappingEmToPixels(&Info, Profile.Size);
 
-        // A codepoint the typeface has no glyph for is skipped rather than baked blank, so the engine's fallback
-        // glyph can stand in for it when text is drawn.
-        Sequence<Typeface::Glyph> Glyphs;
-        Sequence<int>             Indices;
-
-        // Ranges may overlap or repeat, so a codepoint already decoded is not decoded twice.
-        Table<UInt32, Bool> Seen;
+        // A codepoint the typeface lacks is skipped, not baked blank, so a later face or the fallback glyph fills in.
+        const UInt    Start = Output.Glyphs.GetSize();
+        Sequence<int> Indices;
 
         for (ConstRef<Interval> Block : Profile.Charset)
         {
@@ -186,17 +191,18 @@ namespace Studio::Font
             {
                 const int Index = stbtt_FindGlyphIndex(&Info, static_cast<int>(Codepoint));
 
-                if (Index == 0 || Seen.Contains(Codepoint))
+                // An earlier typeface, or an overlapping range, may have given the codepoint already.
+                if (Index == 0 || Claimed.Contains(Codepoint))
                 {
                     continue;
                 }
-                Seen.Assign(Codepoint, true);
+                Claimed.Assign(Codepoint, true);
 
                 int Advance = 0;
                 int Bearing = 0;
                 stbtt_GetGlyphHMetrics(&Info, Index, &Advance, &Bearing);
 
-                Ref<Typeface::Glyph> Glyph = Glyphs.Append();
+                Ref<Typeface::Glyph> Glyph = Output.Glyphs.Append();
                 Glyph.Codepoint = Codepoint;
                 Glyph.Advance   = static_cast<Real32>(Advance) * Normalize;
 
@@ -206,22 +212,49 @@ namespace Studio::Font
             }
         }
 
-        // stb_truetype reads kerning from `GPOS` if the typeface has one, and from the older `kern` table if not.
-        Typeface::Kerning Kerning;
-
-        for (UInt First = 0; First < Indices.GetSize(); ++First)
+        if (Indices.IsEmpty())
         {
-            for (UInt Second = 0; Second < Indices.GetSize(); ++Second)
-            {
-                if (const int Adjust = stbtt_GetGlyphKernAdvance(&Info, Indices[First], Indices[Second]); Adjust != 0)
-                {
-                    const UInt64 Key = static_cast<UInt64>(Glyphs[First].Codepoint) << 32 | Glyphs[Second].Codepoint;
-
-                    Kerning.Assign(Key, static_cast<Real32>(Adjust) * Normalize);
-                }
-            }
+            return;
         }
 
-        return Typeface(ReadMetrics(Info, Source.GetSize()), Move(Glyphs), Move(Kerning));
+        // The metrics come from the first typeface that gives anything, which is the main one.
+        if (Start == 0)
+        {
+            ReadMetrics(Info, Source.GetSize(), Output.Metrics);
+        }
+
+        const ConstPtr<Typeface::Glyph> Glyphs = Output.Glyphs.GetData() + Start;
+        const UInt32                    Count  = static_cast<UInt32>(Indices.GetSize());
+
+        // Each row is measured on its own and the rows are merged in order, so the table comes out the same every bake.
+        Sequence<Sequence<ZyRender::Font::Kerning::Pair>> Rows;
+        Rows.Advance(Count);
+
+        // Kerning comes from `GPOS` pair adjustments that carry only an x advance, otherwise from the `kern` table.
+        Scheduler.Parallel(ZyJob::Lane::Compute, Count, [&](UInt32 Begin, UInt32 End)
+        {
+            for (UInt32 First = Begin; First < End; ++First)
+            {
+                const UInt64 Lead = static_cast<UInt64>(Glyphs[First].Codepoint) << 32;
+
+                for (UInt32 Second = 0; Second < Count; ++Second)
+                {
+                    const int Adjust = stbtt_GetGlyphKernAdvance(&Info, Indices[First], Indices[Second]);
+
+                    if (Adjust != 0)
+                    {
+                        Rows[First].Append(Lead | Glyphs[Second].Codepoint, static_cast<Real32>(Adjust) * Normalize);
+                    }
+                }
+            }
+        });
+
+        for (ConstRef<Sequence<ZyRender::Font::Kerning::Pair>> Row : Rows)
+        {
+            for (ConstRef<ZyRender::Font::Kerning::Pair> Pair : Row)
+            {
+                Output.Kerning.Assign(Pair.First, Pair.Second);
+            }
+        }
     }
 }

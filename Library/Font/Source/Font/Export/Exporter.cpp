@@ -75,7 +75,7 @@ namespace Studio::Font
                 Body.Write<UInt16>(Side);
                 Body.Write<UInt16>(1);
                 Body.Write<UInt8>(1);
-                Body.WriteBlockCompressed<UInt32>(Texels, 3);
+                Body.WriteBlockCompressed<UInt32>(Texels, 9);
             });
         }
         return Output.Detach();

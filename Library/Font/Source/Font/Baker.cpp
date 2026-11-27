@@ -53,10 +53,8 @@ namespace Studio::Font
             return Blob();
         }
 
-        Typeface::Metrics         Measured;
-        Sequence<Typeface::Glyph> Outlined;
-        Typeface::Kerning         Paired;
-        Table<UInt32, Bool>       Claimed;
+        Typeface            Face;
+        Table<UInt32, Bool> Claimed;
 
         for (ConstRef<Source> Each : Sources)
         {
@@ -75,59 +73,38 @@ namespace Studio::Font
                 Asked.Charset = Each.Charset;
             }
 
-            const Typeface Face = Importer::Import(Each.Data, Asked);
-
-            if (Face.IsEmpty())
+            // The profile's face indexes the main typeface's collection, so every fallback is read at its first face.
+            if (AddressOf(Each) != Sources.GetData())
             {
-                continue;
+                Asked.Face = 0;
             }
 
-            // The metrics come from the first typeface that gives anything, which is the main one.
-            if (Outlined.IsEmpty())
-            {
-                Measured = Face.GetMetrics();
-            }
-
-            for (ConstRef<Typeface::Glyph> Glyph : Face.GetGlyphs())
-            {
-                if (!Claimed.Contains(Glyph.Codepoint))
-                {
-                    Claimed.Assign(Glyph.Codepoint, true);
-                    Outlined.Append(Glyph);
-                }
-            }
-
-            for (ConstRef<Typeface::Kerning::Pair> Pair : Face.GetKerning())
-            {
-                Paired.Assign(Pair.First, Pair.Second);
-            }
+            Importer::Import(mScheduler, Each.Data, Asked, Claimed, Face);
         }
 
-        if (Outlined.IsEmpty())
+        if (Face.Glyphs.IsEmpty())
         {
             LOG_E("Font: the typefaces carry none of the requested codepoints");
 
             return Blob();
         }
 
-        const Typeface Face(Move(Measured), Move(Outlined), Move(Paired));
-
         // Every cell exists before the fields are generated in parallel: each glyph writes only its own cell, and
         // the sequence must not grow while that happens.
-        Sequence<Cell> Cells(Face.GetGlyphs().GetSize());
+        Sequence<Cell> Cells(Face.Glyphs.GetSize());
 
-        for (ConstRef<Typeface::Glyph> Glyph : Face.GetGlyphs())
+        for (ConstRef<Typeface::Glyph> Glyph : Face.Glyphs)
         {
-            Cells.Append().Codepoint = Glyph.Codepoint;
+            Ref<Cell> Entry = Cells.Append();
+            Entry.Codepoint = Glyph.Codepoint;
+            Entry.Advance   = Glyph.Advance;
         }
 
-        const ConstSpan<Typeface::Glyph> Outlines = Face.GetGlyphs();
-
-        mScheduler.Parallel(ZyJob::Lane::Compute, static_cast<UInt32>(Outlines.GetSize()), [&](UInt32 Start, UInt32 End)
+        mScheduler.Parallel(ZyJob::Lane::Compute, static_cast<UInt32>(Cells.GetSize()), [&](UInt32 Start, UInt32 End)
         {
             for (UInt32 Index = Start; Index < End; ++Index)
             {
-                Generator::Generate(Outlines[Index].Outline, Profile.Range, Profile.Angle, Cells[Index].Data);
+                Generator::Generate(Face.Glyphs[Index].Outline, Profile.Range, Profile.Angle, Cells[Index].Data);
             }
         });
 
@@ -157,7 +134,8 @@ namespace Studio::Font
         {
             // The glyph is value-initialized, so a blank is written with zero rectangles, not indeterminate ones.
             ZyRender::Font::Glyph Glyph { };
-            Glyph.Page = static_cast<UInt16>(Entry.Page);
+            Glyph.Advance = Entry.Advance;
+            Glyph.Page    = static_cast<UInt16>(Entry.Page);
 
             // A blank has no field, and text drawing skips a zero-size rectangle.
             if (Entry.Data.Width > 0 && Entry.Data.Height > 0)
@@ -182,30 +160,15 @@ namespace Studio::Font
             Glyphs.Assign(Entry.Codepoint, Glyph);
         }
 
-        // Packing reordered the cells, so each advance is looked up by codepoint rather than by index.
-        for (ConstRef<Typeface::Glyph> Glyph : Face.GetGlyphs())
-        {
-            if (const Ptr<ZyRender::Font::Glyph> Entry = Glyphs.Find(Glyph.Codepoint))
-            {
-                Entry->Advance = Glyph.Advance;
-            }
-        }
-
-        ZyRender::Font::Kerning Kerning = Face.GetKerning();
-
-        ZyRender::Font::Metrics Metrics;
-        Metrics.Size               = Profile.Size;
-        Metrics.Distance           = Profile.Range;
-        Metrics.Ascender           = Face.GetMetrics().Ascender;
-        Metrics.Descender          = Face.GetMetrics().Descender;
-        Metrics.UnderlineOffset    = Face.GetMetrics().UnderlineOffset;
-        Metrics.UnderlineSize      = Profile.Underline;
-        Metrics.UnderlineThickness = Face.GetMetrics().UnderlineThickness;
+        // The importer measured the typeface, and the rest of the metrics are the profile's.
+        Face.Metrics.Size          = Profile.Size;
+        Face.Metrics.Distance      = Profile.Range;
+        Face.Metrics.UnderlineSize = Profile.Underline;
 
         LOG_I("Font: {0} glyph(s), {1} kerning pair(s), {2} page(s) of {3}x{3}",
-            Glyphs.GetSize(), Kerning.GetSize(), Sheet.Pages, Sheet.Side);
+            Glyphs.GetSize(), Face.Kerning.GetSize(), Sheet.Pages, Sheet.Side);
 
-        return Exporter::Export(Metrics, Glyphs, Kerning, Pages, static_cast<UInt16>(Sheet.Side));
+        return Exporter::Export(Face.Metrics, Glyphs, Face.Kerning, Pages, static_cast<UInt16>(Sheet.Side));
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

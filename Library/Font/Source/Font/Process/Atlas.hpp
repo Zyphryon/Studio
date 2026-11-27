@@ -26,6 +26,9 @@ namespace Studio::Font
         /// The codepoint the cell holds.
         UInt32 Codepoint = 0;
 
+        /// The distance the pen advances after the glyph, in em units.
+        Real32 Advance   = 0.0f;
+
         /// The page the cell was placed on.
         UInt32 Page      = 0;
 

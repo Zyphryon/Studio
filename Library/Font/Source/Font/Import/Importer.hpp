@@ -14,6 +14,7 @@
 
 #include "Font/Profile.hpp"
 #include "Font/Typeface.hpp"
+#include <Zyphryon.Job/Service.hpp>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -40,11 +41,18 @@ namespace Studio::Font
         /// \return `true` if the extension is accepted, otherwise `false`.
         static Bool Accepts(Text Type);
 
-        /// \brief Decodes an encoded typeface.
+        /// \brief Decodes the codepoints of a typeface that no earlier face gave, and the kerning between them.
         ///
-        /// \param Source  The encoded typeface.
-        /// \param Profile The settings naming the codepoints and size.
-        /// \return The typeface, or an empty one on failure.
-        static Typeface Import(ConstSpan<Byte> Source, ConstRef<Profile> Profile);
+        /// \param Scheduler The pool the kerning is measured on.
+        /// \param Source    The encoded typeface.
+        /// \param Profile   The settings naming the codepoints, the size and the face read out of a collection.
+        /// \param Claimed   The codepoints earlier faces gave, which receives the ones this face gives.
+        /// \param Output    Receives the glyphs and kerning, and the metrics if it held no glyph yet.
+        static void Import(
+            Ref<ZyJob::Service>      Scheduler,
+            ConstSpan<Byte>          Source,
+            ConstRef<Profile>        Profile,
+            Ref<Table<UInt32, Bool>> Claimed,
+            Ref<Typeface>            Output);
     };
 }

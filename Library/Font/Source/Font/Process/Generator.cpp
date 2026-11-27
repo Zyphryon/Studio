@@ -112,13 +112,13 @@ namespace Studio::Font
             }
         }
 
-        msdfgen::edgeColoringSimple(Native, Angle);
+        // Ink-trap colouring stays consistent even where the short edges of an ink trap or a serif are lost.
+        msdfgen::edgeColoringInkTrap(Native, Angle);
 
-        const msdfgen::Shape::Bounds Ink  = Native.getBounds();
-        const Real32                 Half = Range * 0.5f;
+        const Real32 Half = Range * 0.5f;
 
-        const Real32 SpanX  = static_cast<Real32>(Ink.r - Ink.l) + Range;
-        const Real32 SpanY  = static_cast<Real32>(Ink.t - Ink.b) + Range;
+        const Real32 SpanX  = static_cast<Real32>(Box.r - Box.l) + Range;
+        const Real32 SpanY  = static_cast<Real32>(Box.t - Box.b) + Range;
 
         const UInt32 Width  = static_cast<UInt32>(Ceil(SpanX));
         const UInt32 Height = static_cast<UInt32>(Ceil(SpanY));
@@ -130,8 +130,8 @@ namespace Studio::Font
 
         // Rounding the box out to whole pixels leaves a little slack, which is split evenly so the glyph stays
         // centred in its cell.
-        const Real32 OriginX = (static_cast<Real32>(Ink.l) - Half) - (static_cast<Real32>(Width)  - SpanX) * 0.5f;
-        const Real32 OriginY = (static_cast<Real32>(Ink.b) - Half) - (static_cast<Real32>(Height) - SpanY) * 0.5f;
+        const Real32 OriginX = (static_cast<Real32>(Box.l) - Half) - (static_cast<Real32>(Width)  - SpanX) * 0.5f;
+        const Real32 OriginY = (static_cast<Real32>(Box.b) - Half) - (static_cast<Real32>(Height) - SpanY) * 0.5f;
 
         Output.Bounds = Rect(
             OriginX, OriginY, OriginX + static_cast<Real32>(Width), OriginY + static_cast<Real32>(Height));
