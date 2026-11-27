@@ -105,21 +105,36 @@ namespace Studio::Material
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    Ref<Document::Binding> Document::Bind(Text Name)
+    static auto Named(Text Name)
     {
-        const auto Named = [Name](ConstRef<Binding> Entry)
+        return [Name]<typename Type>(ConstRef<Type> Entry)
         {
             return Entry.Name == Name;
         };
+    }
 
-        if (const SInt Found = Bindings.Find(Named); Found >= 0)
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    template<typename Type>
+    static Ref<Type> Lookup(Ref<Sequence<Type>> Entries, Text Name)
+    {
+        if (const SInt Found = Entries.Find(Named(Name)); Found >= 0)
         {
-            return Bindings[Found];
+            return Entries[Found];
         }
 
-        Ref<Binding> Entry = Bindings.Append();
+        Ref<Type> Entry = Entries.Append();
         Entry.Name = Str(Name);
         return Entry;
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+    Ref<Document::Binding> Document::Bind(Text Name)
+    {
+        return Lookup(Bindings, Name);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -127,19 +142,7 @@ namespace Studio::Material
 
     Ref<Document::Constant> Document::Set(Text Name)
     {
-        const auto Named = [Name](ConstRef<Constant> Entry)
-        {
-            return Entry.Name == Name;
-        };
-
-        if (const SInt Found = Constants.Find(Named); Found >= 0)
-        {
-            return Constants[Found];
-        }
-
-        Ref<Constant> Entry = Constants.Append();
-        Entry.Name = Str(Name);
-        return Entry;
+        return Lookup(Constants, Name);
     }
 
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -147,14 +150,8 @@ namespace Studio::Material
 
     Bool Document::Remove(Text Name)
     {
-        const UInt Textures = Bindings.RemoveSomeIf([Name](ConstRef<Binding> Entry)
-        {
-            return Entry.Name == Name;
-        });
-        const UInt Values   = Constants.RemoveSomeIf([Name](ConstRef<Constant> Entry)
-        {
-            return Entry.Name == Name;
-        });
+        const UInt Textures = Bindings.RemoveSomeIf(Named(Name));
+        const UInt Values   = Constants.RemoveSomeIf(Named(Name));
         return Textures + Values > 0;
     }
 
@@ -172,7 +169,15 @@ namespace Studio::Material
             return false;
         }
 
-        JsonValue Root = JsonDocument::Parse(Text(Input.GetData<Char>(), Input.GetSize()));
+        JsonValue Root;
+        JsonError Error;
+
+        if (!JsonDocument::Parse(Text(Input.GetData<Char>(), Input.GetSize()), Root, Error))
+        {
+            LOG_E("Material: '{0}' is not valid JSON ({1})", Path, Error);
+
+            return false;
+        }
 
         // A `JsonObject` assumes it wraps an object, so the document is checked before it is wrapped.
         if (!Root.IsObject())
