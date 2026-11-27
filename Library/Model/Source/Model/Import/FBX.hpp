@@ -53,9 +53,13 @@ namespace Studio::Model
         /// \param Native  The scene ufbx loaded.
         /// \param Profile The settings giving the scale.
         /// \param Lookup  Receives the joint of every node by its typed id, -1 for a node that is not one.
+        /// \param Rests   Receives the pose each joint was bound at in the source's world, one per joint.
         /// \return The joints, parents first, or empty when nothing deforms.
         static Sequence<Scene::Joint> Build(
-            ConstRef<ufbx_scene> Native, ConstRef<Profile> Profile, Ref<Sequence<SInt32>> Lookup);
+            ConstRef<ufbx_scene>       Native,
+            ConstRef<Profile>          Profile,
+            Ref<Sequence<SInt32>>      Lookup,
+            Ref<Sequence<ufbx_matrix>> Rests);
 
         /// \brief Writes the bones deforming one vertex, keeping the heaviest and renormalizing their weights.
         ///
@@ -63,10 +67,15 @@ namespace Studio::Model
         /// \param Skin   The skin binding the vertex, or `nullptr` for a mesh no skin binds.
         /// \param Index  The vertex within the mesh, which the skin addresses rather than the corner.
         /// \param Lookup The joint of every node by its typed id.
+        /// \param Anchor The joint a vertex no weight reaches follows, the bone above a rigid part or else 0.
         static void Bind(
-            Ref<Scene::Vertex> Vertex, ConstPtr<ufbx_skin_deformer> Skin, UInt32 Index, ConstSpan<SInt32> Lookup);
+            Ref<Scene::Vertex>           Vertex,
+            ConstPtr<ufbx_skin_deformer> Skin,
+            UInt32                       Index,
+            ConstSpan<SInt32>            Lookup,
+            UInt16                       Anchor);
 
-        /// \brief Resamples one take of every joint onto the profile's cadence, measuring slopes for Hermite.
+        /// \brief Resamples one take of every joint on whole steps near the profile's cadence, with slopes for Hermite.
         ///
         /// \param Scheduler The pool the ticks are spread over.
         /// \param Native    The scene ufbx loaded.
@@ -118,7 +127,7 @@ namespace Studio::Model
         ///
         /// \param World The transform from a node's space into the source's world.
         /// \param Scale The factor the positions were scaled by.
-        /// \return The transform, mirrored across Z on both sides and scaled.
+        /// \return The transform, mirrored across Z on both sides with only its translation scaled.
         static ufbx_matrix Place(ConstRef<ufbx_matrix> World, Real32 Scale);
 
         /// \brief Splits a transform into the position, scale and rotation a bone rests at.

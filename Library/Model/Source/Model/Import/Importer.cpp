@@ -46,7 +46,7 @@ namespace Studio::Model
             return Scene();
         }
 
-        if (StrEqualCaseInsensitive(Type, "fbx"))
+        if (Accepts(Type))
         {
             return FBX::Read(Scheduler, Source, Profile);
         }

@@ -26,9 +26,20 @@ namespace Studio::Model
         // Read right-handed and Y-up, then mirrored across Z by hand, so the mirror is the one place axes change.
         ufbx_load_opts Options { };
         Options.target_axes              = ufbx_axes_right_handed_y_up;
-        Options.space_conversion         = UFBX_SPACE_CONVERSION_TRANSFORM_ROOT;
         Options.generate_missing_normals = Profile.Normals;
+
+        // A left-handed source is mirrored by the reader, which turns its faces and normals along with it.
+        Options.handedness_conversion_axis = UFBX_MIRROR_AXIS_Z;
+
+        // The units scale positions and offsets rather than any basis, and inherited scale is folded into the nodes.
+        Options.space_conversion         = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
+        Options.inherit_mode_handling    = UFBX_INHERIT_MODE_HANDLING_COMPENSATE;
         Options.target_unit_meters       = Profile.Units;
+
+        // Embedded images and the curves of a bake without a rig are never read, and broken weights are dropped.
+        Options.ignore_embedded          = true;
+        Options.ignore_animation         = !Profile.Rig;
+        Options.clean_skin_weights       = true;
 
         ufbx_error Error;
 
@@ -54,8 +65,9 @@ namespace Studio::Model
     {
         Scene Result;
 
-        Sequence<SInt32> Lookup;
-        Result.Joints = Build(Native, Profile, Lookup);
+        Sequence<SInt32>      Lookup;
+        Sequence<ufbx_matrix> Rests;
+        Result.Joints = Build(Native, Profile, Lookup, Rests);
 
         for (UInt Index = 0; !Result.Joints.IsEmpty() && Index < Native.anim_stacks.count; ++Index)
         {
@@ -68,6 +80,8 @@ namespace Studio::Model
         // An attribute is read only when it is asked for and at least one mesh carries it.
         Result.Attributes = Scene::Attribute::Position;
 
+        UInt Widest = 3;
+
         for (UInt Index = 0; Index < Native.meshes.count; ++Index)
         {
             ConstRef<ufbx_mesh> Mesh = * Native.meshes.data[Index];
@@ -77,12 +91,12 @@ namespace Studio::Model
                 Result.Attributes |= Carried && Profile.Wants(Slot) ? Value : Scene::Attribute::None;
             };
 
-            const Bool Tangents = Mesh.vertex_tangent.exists && Mesh.vertex_uv.exists;
             Mark(Mesh.vertex_normal.exists, ZyGraphic::VertexSlot::Normal,    Scene::Attribute::Normal);
             Mark(Mesh.vertex_uv.exists,     ZyGraphic::VertexSlot::TexCoord0, Scene::Attribute::TexCoord0);
             Mark(Mesh.uv_sets.count > 1,    ZyGraphic::VertexSlot::TexCoord1, Scene::Attribute::TexCoord1);
             Mark(true,                      ZyGraphic::VertexSlot::Color0,    Scene::Attribute::Color);
-            Mark(Tangents,                  ZyGraphic::VertexSlot::Tangent,   Scene::Attribute::Tangent);
+
+            Widest = Max<UInt>(Widest, Mesh.max_face_triangles * 3);
         }
 
         if (!Result.Joints.IsEmpty())
@@ -90,18 +104,72 @@ namespace Studio::Model
             Result.Attributes |= Scene::Attribute::Skin;
         }
 
-        // Every shading model the scene may carry arrives already translated into the same physically based maps.
-        if (Native.materials.count > Scene::kMaxMaterials)
+        // A face names a material of its own mesh, which its node may override, and the slot past the last means none.
+        const auto Pick = [&Native](ConstRef<ufbx_node> Node, ConstRef<ufbx_mesh> Mesh, UInt Face)
         {
-            LOG_W("Model: the scene carries {0} materials and only the first {1} can be addressed",
-                Native.materials.count, Scene::kMaxMaterials);
+            const UInt32            Local    = Face < Mesh.face_material.count ? Mesh.face_material.data[Face] : 0;
+            ConstPtr<ufbx_material> Material = nullptr;
+
+            if (Local < Node.materials.count)
+            {
+                Material = Node.materials.data[Local];
+            }
+            else if (Local < Mesh.materials.count)
+            {
+                Material = Mesh.materials.data[Local];
+            }
+            return static_cast<UInt>(Material ? Material->typed_id : Native.materials.count);
+        };
+
+        // Each material's indices are counted ahead, then the count turns into where its run writes, or -1 if left out.
+        Sequence<SInt> Cursors;
+        Cursors.Fill(0, Native.materials.count + 1);
+
+        for (UInt Index = 0; Index < Native.nodes.count; ++Index)
+        {
+            ConstRef<ufbx_node> Node = * Native.nodes.data[Index];
+
+            for (UInt Face = 0; Node.mesh && !Node.is_root && Face < Node.mesh->faces.count; ++Face)
+            {
+                if (const UInt32 Corners = Node.mesh->faces.data[Face].num_indices; Corners >= 3)
+                {
+                    Cursors[Pick(Node, * Node.mesh, Face)] += (Corners - 2) * 3;
+                }
+            }
         }
 
-        for (UInt Index = 0; Index < Min<UInt>(Native.materials.count, Scene::kMaxMaterials); ++Index)
+        // Only the materials faces use are written, and the faces that name none share one entry naming nothing.
+        UInt Total   = 0;
+        UInt Dropped = 0;
+
+        for (UInt Owner = 0; Owner < Cursors.GetSize(); ++Owner)
         {
-            ConstRef<ufbx_material> Source = * Native.materials.data[Index];
+            const UInt Count = static_cast<UInt>(Cursors[Owner]);
+
+            if (Count == 0 || Result.Materials.GetSize() == Scene::kMaxMaterials)
+            {
+                Cursors[Owner] = -1;
+                Dropped       += Count / 3;
+                continue;
+            }
+
+            Ref<Scene::Surface> Run = Result.Surfaces.Append();
+            Run.Offset   = static_cast<UInt32>(Total);
+            Run.Count    = static_cast<UInt32>(Count);
+            Run.Material = static_cast<UInt8>(Result.Materials.GetSize());
+
+            Cursors[Owner] = static_cast<SInt>(Total);
+            Total         += Count;
 
             Ref<Scene::Material> Entry = Result.Materials.Append();
+
+            if (Owner == Native.materials.count)
+            {
+                continue;
+            }
+
+            // Every shading model the scene may carry arrives already translated into the same physically based maps.
+            ConstRef<ufbx_material> Source = * Native.materials.data[Owner];
             Entry.Name = Wrap(Source.name);
             Attach(Entry, Scene::Slot::Albedo,       Source.pbr.base_color);
             Attach(Entry, Scene::Slot::Normal,       Source.pbr.normal_map);
@@ -120,25 +188,17 @@ namespace Studio::Model
             }
         }
 
-        // A scene with no materials still draws its faces, under one material that names nothing.
-        if (Result.Materials.IsEmpty())
+        if (Dropped > 0)
         {
-            Result.Materials.Append();
-        }
-
-        UInt Widest = 3;
-
-        for (UInt Index = 0; Index < Native.meshes.count; ++Index)
-        {
-            Widest = Max<UInt>(Widest, Native.meshes.data[Index]->max_face_triangles * 3);
+            LOG_W("Model: the faces use more than {0} materials and the {1} triangles past them are dropped",
+                Scene::kMaxMaterials, Dropped);
         }
 
         Sequence<UInt32> Fan;
         Fan.Resize(Widest);
 
-        // The triangles of every material, gathered in one walk and laid end to end, one run per primitive.
-        Sequence<Sequence<UInt32>> Runs;
-        Runs.Resize(Max<UInt>(Result.Materials.GetSize(), 1));
+        Result.Indices.Resize(Total);
+        Result.Vertices.Reserve(Total);
 
         for (UInt Index = 0; Index < Native.nodes.count; ++Index)
         {
@@ -149,34 +209,53 @@ namespace Studio::Model
                 continue;
             }
 
-            // Instances are flattened into world space, each copy placed where the scene puts it.
-            ConstRef<ufbx_mesh> Mesh     = * Node->mesh;
-            const ufbx_matrix   Geometry = Node->geometry_to_world;
-            const ufbx_matrix   Rotation = ufbx_matrix_for_normals(AddressOf(Geometry));
+            ConstRef<ufbx_mesh> Mesh = * Node->mesh;
 
             // Only the first skin binding is honoured, since a vertex carries one set of bones.
             ConstPtr<ufbx_skin_deformer> Skin
                 = Result.Joints.IsEmpty() || Mesh.skin_deformers.count == 0 ? nullptr : Mesh.skin_deformers.data[0];
 
+            // Instances are flattened into world space, each copy placed where the scene puts it.
+            ufbx_matrix Geometry = Node->geometry_to_world;
+            UInt16      Anchor   = 0;
+
+            if (Skin != nullptr && Skin->clusters.count > 0)
+            {
+                // A skinned copy is placed where it was bound, which is the pose its bones' inverses undo.
+                ConstRef<ufbx_skin_cluster> Cluster = * Skin->clusters.data[0];
+                Geometry = ufbx_matrix_mul(AddressOf(Cluster.bind_to_world), AddressOf(Cluster.geometry_to_bone));
+            }
+            else
+            {
+                // A rigid part follows the nearest bone above it, placed against that bone as it was bound.
+                ConstPtr<ufbx_node> Bone = Node;
+
+                while (Bone && Lookup[Bone->typed_id] < 0)
+                {
+                    Bone = Bone->parent;
+                }
+
+                if (Bone != nullptr)
+                {
+                    Anchor = static_cast<UInt16>(Lookup[Bone->typed_id]);
+
+                    const ufbx_matrix Undo  = ufbx_matrix_invert(AddressOf(Bone->node_to_world));
+                    const ufbx_matrix Local = ufbx_matrix_mul(AddressOf(Undo), AddressOf(Geometry));
+                    Geometry = ufbx_matrix_mul(AddressOf(Rests[Anchor]), AddressOf(Local));
+                }
+            }
+
+            const ufbx_matrix Rotation = ufbx_matrix_for_normals(AddressOf(Geometry));
+
+            // A copy the scene reflects turns its fronts around, so its triangles are wound back.
+            const Bool Flip = ufbx_matrix_determinant(AddressOf(Geometry)) < 0.0;
+
             for (UInt Face = 0; Face < Mesh.faces.count; ++Face)
             {
-                // A face names a material of its own mesh, which its node may override, so the scene's slot is found there.
-                const UInt32            Local    = Face < Mesh.face_material.count ? Mesh.face_material.data[Face] : 0;
-                ConstPtr<ufbx_material> Material = nullptr;
-
-                if (Local < Node->materials.count)
-                {
-                    Material = Node->materials.data[Local];
-                }
-                else if (Local < Mesh.materials.count)
-                {
-                    Material = Mesh.materials.data[Local];
-                }
-
-                const UInt Owner = Material ? Material->typed_id : 0;
+                const UInt Owner = Pick(* Node, Mesh, Face);
 
                 // A face past the materials that can be addressed has no primitive to draw it.
-                if (Owner >= Runs.GetSize())
+                if (Cursors[Owner] < 0)
                 {
                     continue;
                 }
@@ -185,34 +264,24 @@ namespace Studio::Model
                 const UInt32 Count
                     = ufbx_triangulate_face(Fan.GetData(), Fan.GetSize(), AddressOf(Mesh), Mesh.faces.data[Face]);
 
+                for (UInt Triangle = 0; Flip && Triangle < Count; ++Triangle)
+                {
+                    Swap(Fan[Triangle * 3 + 1], Fan[Triangle * 3 + 2]);
+                }
+
                 for (UInt Corner = 0; Corner < Count * 3; ++Corner)
                 {
-                    Runs[Owner].Append(static_cast<UInt32>(Result.Vertices.GetSize()));
+                    Result.Indices[Cursors[Owner]++] = static_cast<UInt32>(Result.Vertices.GetSize());
 
                     Ref<Scene::Vertex> Vertex = Result.Vertices.Append(
                         Resolve(Mesh, Fan[Corner], Geometry, Rotation, Profile, Result.Attributes));
 
                     if (!Result.Joints.IsEmpty())
                     {
-                        Bind(Vertex, Skin, Mesh.vertex_indices.data[Fan[Corner]], Lookup);
+                        Bind(Vertex, Skin, Mesh.vertex_indices.data[Fan[Corner]], Lookup, Anchor);
                     }
                 }
             }
-        }
-
-        for (UInt Slot = 0; Slot < Runs.GetSize(); ++Slot)
-        {
-            if (Runs[Slot].IsEmpty())
-            {
-                continue;
-            }
-
-            Ref<Scene::Surface> Entry = Result.Surfaces.Append();
-            Entry.Offset   = static_cast<UInt32>(Result.Indices.GetSize());
-            Entry.Count    = static_cast<UInt32>(Runs[Slot].GetSize());
-            Entry.Material = static_cast<UInt8>(Slot);
-
-            Result.Indices.Append(Runs[Slot]);
         }
         return Result;
     }
@@ -221,10 +290,12 @@ namespace Studio::Model
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
     Sequence<Scene::Joint> FBX::Build(
-        ConstRef<ufbx_scene> Native, ConstRef<Profile> Profile, Ref<Sequence<SInt32>> Lookup)
+        ConstRef<ufbx_scene>       Native,
+        ConstRef<Profile>          Profile,
+        Ref<Sequence<SInt32>>      Lookup,
+        Ref<Sequence<ufbx_matrix>> Rests)
     {
         Sequence<Scene::Joint> Joints;
-        Sequence<ufbx_matrix>  Worlds;
         Sequence<UInt64>       Taken;
 
         Lookup.Fill(-1, Native.nodes.count);
@@ -262,6 +333,7 @@ namespace Studio::Model
         {
             ConstRef<ufbx_node> Node = * Native.nodes.data[Index];
 
+            // A socket under a bone whose scale was split onto a helper is missed, since the helper holds the weight.
             if (Node.bone && Node.parent && !Binding[Node.typed_id] && Binding[Node.parent->typed_id])
             {
                 Sockets[Node.typed_id] = ufbx_matrix_mul(Binding[Node.parent->typed_id], AddressOf(Node.node_to_parent));
@@ -287,8 +359,9 @@ namespace Studio::Model
 
             const ufbx_matrix World = Place(* Binding[Node.typed_id], Profile.Scale);
 
+            // A scale helper carries the bone it splits off, its weight and its attribute, so it takes the bone's name.
             Ref<Scene::Joint> Joint = Joints.Append();
-            Joint.Name = Wrap(Node.name);
+            Joint.Name = Wrap(Node.is_scale_helper ? Node.parent->name : Node.name);
 
             // A clip finds its bones by name, so a name another bone holds, or none at all, takes the bone's place too.
             if (Joint.Name.IsEmpty() || Taken.Contains(Scene::Identify(Joint.Name)))
@@ -305,7 +378,8 @@ namespace Studio::Model
 
             if (Joint.Parent >= 0)
             {
-                const ufbx_matrix Invert = ufbx_matrix_invert(AddressOf(Worlds[Joint.Parent]));
+                const ufbx_matrix Parent = Place(Rests[Joint.Parent], Profile.Scale);
+                const ufbx_matrix Invert = ufbx_matrix_invert(AddressOf(Parent));
                 Decompose(ufbx_matrix_mul(AddressOf(Invert), AddressOf(World)), Joint);
             }
             else
@@ -317,7 +391,7 @@ namespace Studio::Model
             const ufbx_matrix Inverse = ufbx_matrix_invert(AddressOf(World));
             Joint.Inverse = Adopt(Inverse);
 
-            Worlds.Append(World);
+            Rests.Append(* Binding[Node.typed_id]);
             Lookup[Node.typed_id] = static_cast<SInt32>(Joints.GetSize() - 1);
         }
         return Joints;
@@ -326,7 +400,12 @@ namespace Studio::Model
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-    void FBX::Bind(Ref<Scene::Vertex> Vertex, ConstPtr<ufbx_skin_deformer> Skin, UInt32 Index, ConstSpan<SInt32> Lookup)
+    void FBX::Bind(
+        Ref<Scene::Vertex>           Vertex,
+        ConstPtr<ufbx_skin_deformer> Skin,
+        UInt32                       Index,
+        ConstSpan<SInt32>            Lookup,
+        UInt16                       Anchor)
     {
         Real32 Total = 0.0f;
         UInt   Slot  = 0;
@@ -361,8 +440,8 @@ namespace Studio::Model
         }
         else
         {
-            // A vertex no skin reaches follows the root, the one bone every rig has.
-            Vertex.Joints[0]  = 0;
+            // A vertex no skin reaches follows the bone above its rigid part, or else the root every rig has.
+            Vertex.Joints[0]  = Anchor;
             Vertex.Weights[0] = 1.0f;
         }
     }
@@ -381,7 +460,11 @@ namespace Studio::Model
         const Real64 Begin  = Stack.time_begin;
         const Real64 Length = Stack.time_end - Stack.time_begin;
         const Bool   Shaped = Profile.Blend == Interpolation::Hermite;
-        const UInt32 Count  = static_cast<UInt32>(Length * Profile.Rate) + 1;
+
+        // The cadence is bent to a whole number of steps, so the last sample lands on the take's very end.
+        const UInt32 Steps   = Max<UInt32>(1, static_cast<UInt32>(Round(Length * Profile.Rate)));
+        const Real64 Cadence = static_cast<Real64>(Steps) / Length;
+        const UInt32 Count   = Steps + 1;
 
         // Only the bones and their ancestors are evaluated, never the meshes, controls and helpers around them.
         Sequence<UInt32>              Owners;
@@ -418,7 +501,7 @@ namespace Studio::Model
         Scene::Clip Clip;
         Clip.Name     = Wrap(Stack.name);
         Clip.Duration = Length;
-        Clip.Rate     = Profile.Rate;
+        Clip.Rate     = static_cast<Real32>(Cadence);
         Clip.Blend    = Profile.Blend;
 
         for (UInt Joint = 0; Joint < Joints.GetSize(); ++Joint)
@@ -487,7 +570,7 @@ namespace Studio::Model
 
             for (UInt32 Tick = Start; Tick < End; ++Tick)
             {
-                const Real64 Time = Begin + Min(static_cast<Real64>(Tick) / Profile.Rate, Length);
+                const Real64 Time = Begin + Min(static_cast<Real64>(Tick) / Cadence, Length);
 
                 Evaluate(Time, Current);
 
@@ -505,7 +588,7 @@ namespace Studio::Model
                 }
 
                 // Straddling the tick, so a key held exactly on it gives the curve's slope and not one arm of a corner.
-                const Real64 Step  = kDerivative / Profile.Rate;
+                const Real64 Step  = kDerivative / Cadence;
                 const Real64 Lower = Max(Begin, Time - Step);
                 const Real64 Upper = Min(Begin + Length, Time + Step);
 
@@ -576,20 +659,6 @@ namespace Studio::Model
             Result.Normal = Orient(Rotation, ufbx_get_vertex_vec3(AddressOf(Mesh.vertex_normal), Corner));
         }
 
-        if (HasBit(Attributes, Scene::Attribute::Tangent) && Mesh.vertex_tangent.exists)
-        {
-            Result.Tangent = Orient(Rotation, ufbx_get_vertex_vec3(AddressOf(Mesh.vertex_tangent), Corner));
-
-            // Only the side the bitangent falls on is kept, turned over since V runs the other way once flipped.
-            if (Mesh.vertex_bitangent.exists)
-            {
-                const Vector3 Bitangent
-                    = Orient(Rotation, ufbx_get_vertex_vec3(AddressOf(Mesh.vertex_bitangent), Corner));
-                const Vector3 Expected = Vector3::Cross(Result.Normal, Result.Tangent);
-                Result.Handedness = Vector3::Dot(Expected, Bitangent) < 0.0f ? 1.0f : -1.0f;
-            }
-        }
-
         // FBX runs V up the image, and the engine runs it down.
         if (HasBit(Attributes, Scene::Attribute::TexCoord0) && Mesh.vertex_uv.exists)
         {
@@ -633,7 +702,6 @@ namespace Studio::Model
             return;
         }
 
-        // The relative path is preferred, since a scene may or may not have been saved beside its textures.
         const Text Path = Map.texture->relative_filename.length > 0
             ? Wrap(Map.texture->relative_filename)
             : Wrap(Map.texture->filename);
@@ -667,13 +735,13 @@ namespace Studio::Model
     {
         ufbx_matrix Result = World;
 
-        // Mirroring both sides flips every element in the Z row or the Z column, but not in both.
+        // Mirroring both sides flips each element in the Z row or Z column but not both, and only the offset is scaled.
         for (UInt Column = 0; Column < 4; ++Column)
         {
             for (UInt Row = 0; Row < 3; ++Row)
             {
                 const Real64 Sign = (Row == 2) != (Column == 2) ? -1.0 : 1.0;
-                Result.cols[Column].v[Row] *= Sign * Scale;
+                Result.cols[Column].v[Row] *= Column == 3 ? Sign * Scale : Sign;
             }
         }
         return Result;
