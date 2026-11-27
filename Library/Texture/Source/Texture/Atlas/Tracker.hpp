@@ -12,7 +12,7 @@
 // [  HEADER  ]
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#include <Zyphryon.Graphic/Types.hpp>
+#include "Packer.hpp"
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -143,6 +143,15 @@ namespace Studio::Texture
         /// `true` to LZ4-compress the payload when it comes out smaller, `false` to store it raw.
         Bool                     Compress = true;
 
+        /// `true` if alpha is opacity, which weighs each texel's colour down the mips, `false` if it holds data.
+        Bool                     Opacity  = false;
+
+        /// The alpha an alpha test cuts at, whose share of passing texels every mip keeps, or zero to keep none.
+        Real32                   Cutoff   = 0.0f;
+
+        /// `true` if the texels are tangent-space normals, renormalised in every mip, `false` for anything else.
+        Bool                     Normal   = false;
+
         /// The width of every slice, in pixels.
         UInt16                   Width    = 0;
 
@@ -157,6 +166,12 @@ namespace Studio::Texture
 
         /// The pixels each region's edge is repeated outward by.
         UInt16                   Extrude  = 0;
+
+        /// The way the regions were laid out, packed together or one to a slice.
+        Packer::Mode             Mode     = Packer::Mode::Atlas;
+
+        /// The way each region of an array was sized to its slice.
+        Packer::Fitting          Fit      = Packer::Fitting::Stretch;
 
         /// The multiple the slice count of an array is rounded up to, leaving blank slices for later.
         UInt16                   Headroom = 1;

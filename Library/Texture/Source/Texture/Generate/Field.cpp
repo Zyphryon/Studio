@@ -147,7 +147,16 @@ namespace Studio::Texture
                     break;
                 }
 
-                Result.Set(X, Y, Input.Invert ? 1.0f - Value : Value);
+                // Transparent pixels are ground, so the outline of the art reads as the edge of a raised shape.
+                if (Input.Masked && !Source.IsSolid(X, Y))
+                {
+                    Value = 0.0f;
+                }
+                else if (Input.Invert)
+                {
+                    Value = 1.0f - Value;
+                }
+                Result.Set(X, Y, Value);
             }
         }
         return Result;

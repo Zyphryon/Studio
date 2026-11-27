@@ -11,6 +11,7 @@
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 #include "Packer.hpp"
+#include "Tracker.hpp"
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -49,6 +50,7 @@ namespace Studio::Texture
     static void Occupy(Ref<Sequence<Area>> Free, ConstRef<Area> Used)
     {
         Sequence<Area> Next;
+        Sequence<Bool> Split;
 
         // Every free rectangle the placement overlaps is split into what is left of it on each of its four sides.
         for (ConstRef<Area> Candidate : Free)
@@ -56,6 +58,7 @@ namespace Studio::Texture
             if (!Used.Overlaps(Candidate))
             {
                 Next.Append(Candidate);
+                Split.Append(false);
                 continue;
             }
 
@@ -75,6 +78,7 @@ namespace Studio::Texture
             {
                 Next.Append(Candidate.X, Used.GetBottom(), Candidate.Width, Candidate.GetBottom() - Used.GetBottom());
             }
+            Split.Fill(true, Next.GetSize() - Split.GetSize());
         }
 
         // A rectangle lying wholly inside another is dropped, since the larger one already offers that space.
@@ -84,7 +88,8 @@ namespace Studio::Texture
         {
             Bool Covered = false;
 
-            for (UInt Other = 0; Other < Next.GetSize() && !Covered; ++Other)
+            // The rectangles left untouched held none inside another before, so only the new pieces are checked.
+            for (UInt Other = 0; Split[Index] && Other < Next.GetSize() && !Covered; ++Other)
             {
                 if (Other != Index && Next[Other].Contains(Next[Index]))
                 {
@@ -105,7 +110,7 @@ namespace Studio::Texture
 
     static Bool Place(Ref<Tracker> Atlas,
         ConstRef<Sequence<UInt>>   Order,
-        ConstRef<Packer::Settings> Settings, UInt32 Width, UInt32 Height, Bool Spill, Ref<UInt> Failed)
+        ConstRef<Packer::Settings> Settings, UInt32 Block, UInt32 Width, UInt32 Height, Bool Spill, Ref<UInt> Failed)
     {
         const UInt32 Border = Settings.Extrude * 2u + Settings.Padding;
         const Area   Blank(0, 0, static_cast<UInt16>(Width), static_cast<UInt16>(Height));
@@ -118,8 +123,9 @@ namespace Studio::Texture
         {
             Ref<Region> Entry = Atlas.Regions[Index];
 
-            const UInt32 Across = Entry.Rect.Width  + Border;
-            const UInt32 Down   = Entry.Rect.Height + Border;
+            // Every cell spans whole blocks, so a compressed block or an early mip texel never mixes two regions.
+            const UInt32 Across = Align(Entry.Rect.Width  + Border, Block);
+            const UInt32 Down   = Align(Entry.Rect.Height + Border, Block);
 
             Area   Best;
             UInt32 BestScore = 0;
@@ -221,6 +227,16 @@ namespace Studio::Texture
             return false;
         }
 
+        // A side rounded up to a power of two can only reach the largest power of two its cap holds.
+        Packer::Settings Capped = Settings;
+        Capped.Width  = static_cast<UInt16>(CeilBit(Settings.Width  + 1u) / 2);
+        Capped.Height = static_cast<UInt16>(CeilBit(Settings.Height + 1u) / 2);
+
+        if (Settings.PowerOfTwo && (Capped.Width != Settings.Width || Capped.Height != Settings.Height))
+        {
+            return Pack(Atlas, Capped);
+        }
+
         // A square atlas takes the longer side, which would pass the shorter limit when the two differ.
         if (Settings.Square && Settings.Layout == Mode::Atlas && Settings.Width != Settings.Height)
         {
@@ -292,6 +308,8 @@ namespace Studio::Texture
             Atlas.Height  = Height;
             Atlas.Slices  = static_cast<UInt16>(Atlas.Regions.GetSize());
             Atlas.Padding = 0;
+            Atlas.Mode    = Mode::Array;
+            Atlas.Fit     = Settings.Fit;
 
             // A region smaller than its slice has room around it for its edge to be repeated into.
             Atlas.Extrude = Settings.Fit == Fitting::Stretch ? 0 : Settings.Extrude;
@@ -328,9 +346,12 @@ namespace Studio::Texture
 
         for (ConstRef<Region> Entry : Atlas.Regions)
         {
-            Total  += static_cast<UInt64>(Entry.Rect.Width + Border) * (Entry.Rect.Height + Border);
-            Widest  = Max<UInt32>(Widest,  Entry.Rect.Width  + Border);
-            Tallest = Max<UInt32>(Tallest, Entry.Rect.Height + Border);
+            const UInt32 Across = Align(Entry.Rect.Width  + Border, kBlock);
+            const UInt32 Down   = Align(Entry.Rect.Height + Border, kBlock);
+
+            Total  += static_cast<UInt64>(Across) * Down;
+            Widest  = Max(Widest,  Across);
+            Tallest = Max(Tallest, Down);
         }
 
         // The search starts from the smallest bin that could hold every region, and grows it until they all fit.
@@ -348,17 +369,17 @@ namespace Studio::Texture
         }
 
         UInt Failed = 0;
-        Bool Placed = Place(Atlas, Order, Settings, Width, Height, false, Failed);
+        Bool Placed = Place(Atlas, Order, Settings, kBlock, Width, Height, false, Failed);
 
         while (!Placed && Grow(Width, Height, Settings))
         {
-            Placed = Place(Atlas, Order, Settings, Width, Height, false, Failed);
+            Placed = Place(Atlas, Order, Settings, kBlock, Width, Height, false, Failed);
         }
 
         // Regions spill onto further slices only once one slice at its largest cannot hold them all.
         if (!Placed && Settings.Pages)
         {
-            Placed = Place(Atlas, Order, Settings, Settings.Width, Settings.Height, true, Failed);
+            Placed = Place(Atlas, Order, Settings, kBlock, Settings.Width, Settings.Height, true, Failed);
         }
 
         if (!Placed)
@@ -384,11 +405,11 @@ namespace Studio::Texture
             Bottom = Max<UInt32>(Bottom, Entry.Rect.Y + Entry.Rect.Height + Settings.Extrude + Settings.Padding);
         }
 
-        // Every slice of an array shares one extent, so only a lone slice shrinks to what it used.
+        // Every slice of an array shares one extent, so only a lone slice shrinks to what it used, in whole blocks.
         const Bool Paged = Pages > 1;
 
-        Width  = Paged ? Settings.Width  : Right;
-        Height = Paged ? Settings.Height : Bottom;
+        Width  = Paged ? Settings.Width  / kBlock * kBlock : Align(Right,  kBlock);
+        Height = Paged ? Settings.Height / kBlock * kBlock : Align(Bottom, kBlock);
 
         if (Settings.PowerOfTwo)
         {
@@ -408,6 +429,8 @@ namespace Studio::Texture
         Atlas.Slices  = static_cast<UInt16>(Pages);
         Atlas.Padding = Settings.Padding;
         Atlas.Extrude = Settings.Extrude;
+        Atlas.Mode    = Mode::Atlas;
+        Atlas.Fit     = Fitting::Stretch;
         return true;
     }
 }

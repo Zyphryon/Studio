@@ -12,7 +12,6 @@
 // [  HEADER  ]
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#include "Tracker.hpp"
 #include "Texture/Profile.hpp"
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -21,6 +20,8 @@
 
 namespace Studio::Texture
 {
+    struct Tracker;
+
     /// \brief Places the regions of a tracker, either packed together on pages or one to a slice.
     class Packer final
     {
@@ -80,6 +81,11 @@ namespace Studio::Texture
             /// \return The settings, with defaults where a switch is missing.
             static Settings From(ConstRef<Environment> Environment);
         };
+
+    private:
+
+        /// \brief The side of the compressed block every atlas cell and slice side is a multiple of, in pixels.
+        static constexpr UInt32 kBlock = 4;
 
     public:
 

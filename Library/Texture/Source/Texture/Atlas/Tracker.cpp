@@ -132,7 +132,15 @@ namespace Studio::Texture
             return false;
         }
 
-        JsonValue Document = JsonDocument::Parse(Text(Input.GetData<Char>(), Input.GetSize()));
+        JsonValue Document;
+        JsonError Error;
+
+        if (!JsonDocument::Parse(Text(Input.GetData<Char>(), Input.GetSize()), Document, Error))
+        {
+            LOG_E("Texture: '{0}' is not valid JSON: {1}", Path, Error);
+
+            return false;
+        }
 
         // A `JsonObject` assumes it wraps an object, so the document is checked before it is wrapped.
         if (!Document.IsObject())
@@ -160,10 +168,15 @@ namespace Studio::Texture
         Result.Slices   = Max<UInt16>(Root.GetNumber<UInt16>("Slices", 1), 1);
         Result.Padding  = Root.GetNumber<UInt16>("Padding", 0);
         Result.Extrude  = Root.GetNumber<UInt16>("Extrude", 0);
+        Result.Mode     = Root.GetEnum("Mode", Result.Mode);
+        Result.Fit      = Root.GetEnum("Fit",  Result.Fit);
         Result.Headroom = Root.GetNumber<UInt16>("Headroom", 1);
         Result.Mipmaps  = Root.GetBool("Mipmaps",  Result.Mipmaps);
         Result.Linear   = Root.GetBool("Linear",   Result.Linear);
         Result.Compress = Root.GetBool("Compress", Result.Compress);
+        Result.Opacity  = Root.GetBool("Opacity",  Result.Opacity);
+        Result.Cutoff   = Root.GetNumber<Real32>("Cutoff", Result.Cutoff);
+        Result.Normal   = Root.GetBool("Normal",   Result.Normal);
 
         if (const JsonArray Fill = Root.GetArray("Fill"); !Fill.IsNullOrEmpty() && Fill.GetSize() == 4)
         {
@@ -227,6 +240,27 @@ namespace Studio::Texture
                 Target.Source = Str(Source);
                 Target.Origin = static_cast<UInt8>(Origin);
             }
+
+            // Only the four capital letters are read, so any other key writes nothing and is named here.
+            if (Channels.GetSize() > Value.Channels.GetSize())
+            {
+                LOG_W("Texture: region {0} of '{1}' has a channel key other than R, G, B or A, which is ignored",
+                    Index, Path);
+            }
+        }
+
+        // A consumer looks a region up by its name, so of two that share one it finds only one.
+        for (UInt Index = 0; Index < Result.Regions.GetSize(); ++Index)
+        {
+            ConstRef<Str> Name = Result.Regions[Index].Name;
+
+            for (UInt Other = Index + 1; !Name.IsEmpty() && Other < Result.Regions.GetSize(); ++Other)
+            {
+                if (StrEqualCaseInsensitive(Name, Result.Regions[Other].Name))
+                {
+                    LOG_W("Texture: regions {0} and {1} of '{2}' are both named '{3}'", Index, Other, Path, Name);
+                }
+            }
         }
 
         Output = Move(Result);
@@ -257,6 +291,31 @@ namespace Studio::Texture
         Root.SetBool("Compress", Compress);
 
         // Fields left at their defaults are not written, so older trackers read back unchanged.
+        if (Mode != Packer::Mode::Atlas)
+        {
+            Root.SetEnum("Mode", Mode);
+        }
+
+        if (Fit != Packer::Fitting::Stretch)
+        {
+            Root.SetEnum("Fit", Fit);
+        }
+
+        if (Opacity)
+        {
+            Root.SetBool("Opacity", Opacity);
+        }
+
+        if (Cutoff > 0.0f)
+        {
+            Root.SetNumber<Real32>("Cutoff", Cutoff);
+        }
+
+        if (Normal)
+        {
+            Root.SetBool("Normal", Normal);
+        }
+
         if (Headroom > 1)
         {
             Root.SetNumber<UInt16>("Headroom", Headroom);

@@ -118,7 +118,7 @@ namespace Studio::Texture
 
     public:
 
-        /// \brief Reads the height of every pixel of a canvas, turned upside down if the settings invert it.
+        /// \brief Reads the height of every pixel of a canvas, inverted or masked to ground as the settings say.
         ///
         /// \param Source The canvas to read.
         /// \param Input  The way each pixel is read as a height.

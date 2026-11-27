@@ -22,59 +22,124 @@ namespace Studio::Texture
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+    static void Sweep(Ref<Field> Grid, UInt32 Line, Bool Down, Bool Wrap)
+    {
+        const SInt32 Count = Down ? Grid.GetHeight() : Grid.GetWidth();
+
+        // A tile repeats, so the line is read once more on either side and every nearest copy of a pixel is seen.
+        const SInt32 Start = Wrap ? -Count : 0;
+        const SInt32 End   = Wrap ? Count * 2 : Count;
+
+        const auto At = [&](SInt32 Position)
+        {
+            const UInt32 Along = Canvas::Reach(Position, Count, Wrap);
+            return static_cast<Real64>(Down ? Grid.Get(Line, Along) : Grid.Get(Along, Line));
+        };
+
+        // The lower envelope of the parabolas the reached pixels cast, each with its height and where it takes over.
+        Sequence<SInt32> Apex;
+        Sequence<Real64> Lift;
+        Sequence<Real64> Onset;
+
+        for (SInt32 Position = Start; Position < End; ++Position)
+        {
+            const Real64 Height = At(Position);
+            const Real64 Here   = Position;
+
+            if (Height == kInfinity<Real64>)
+            {
+                continue;
+            }
+
+            Real64 Cross = -kInfinity<Real64>;
+
+            while (!Apex.IsEmpty())
+            {
+                const Real64 Last = Apex.GetBack();
+
+                Cross = (Height + Here * Here - Lift.GetBack() - Last * Last) / (2.0 * (Here - Last));
+
+                if (Cross > Onset.GetBack())
+                {
+                    break;
+                }
+                Apex.RemoveLast();
+                Lift.RemoveLast();
+                Onset.RemoveLast();
+            }
+
+            Apex.Append(Position);
+            Lift.Append(Height);
+            Onset.Append(Cross);
+        }
+
+        UInt Taken = 0;
+
+        for (SInt32 Position = 0; Position < Count && !Apex.IsEmpty(); ++Position)
+        {
+            while (Taken + 1 < Apex.GetSize() && Onset[Taken + 1] < Position)
+            {
+                ++Taken;
+            }
+
+            const Real64 Offset = Position - Apex[Taken];
+            const Real32 Value  = static_cast<Real32>(Offset * Offset + Lift[Taken]);
+
+            if (Down)
+            {
+                Grid.Set(Line, Position, Value);
+            }
+            else
+            {
+                Grid.Set(Position, Line, Value);
+            }
+        }
+    }
+
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
     static Field Distance(ConstRef<Canvas> Source, Bool Wrap)
     {
-        const SInt32 Width  = Source.GetWidth();
-        const SInt32 Height = Source.GetHeight();
+        const UInt32 Width  = Source.GetWidth();
+        const UInt32 Height = Source.GetHeight();
 
         Field Result(Source.GetWidth(), Source.GetHeight());
 
         // Empty pixels are the outline at distance zero, and every drawn pixel starts out unreached.
-        for (SInt32 Y = 0; Y < Height; ++Y)
+        for (UInt32 Y = 0; Y < Height; ++Y)
         {
-            for (SInt32 X = 0; X < Width; ++X)
+            for (UInt32 X = 0; X < Width; ++X)
             {
-                Result.Set(X, Y, Source.IsSolid(X, Y) ? 1.0e9f : 0.0f);
+                Result.Set(X, Y, Source.IsSolid(X, Y) ? kInfinity<Real32> : 0.0f);
             }
         }
 
-        // A texture that does not tile ends in empty space, so its border counts as outline too.
-        const auto At = [&](SInt32 X, SInt32 Y)
+        // The exact squared Euclidean distance is separable, a sweep along every row and then down every column.
+        for (UInt32 Y = 0; Y < Height; ++Y)
         {
-            if (!Wrap && (X < 0 || Y < 0 || X >= Width || Y >= Height))
-            {
-                return 0.0f;
-            }
-            return Result.Fetch(X, Y, true);
-        };
-
-        constexpr Real32 kStraight = 1.0f;
-        constexpr Real32 kDiagonal = 1.41421356f;
-
-        // A two-pass chamfer distance transform, each pixel taking the nearest distance its visited neighbours offer.
-        for (SInt32 Y = 0; Y < Height; ++Y)
-        {
-            for (SInt32 X = 0; X < Width; ++X)
-            {
-                Real32 Best = Result.Get(X, Y);
-                Best = Min(Best, At(X - 1, Y)     + kStraight);
-                Best = Min(Best, At(X,     Y - 1) + kStraight);
-                Best = Min(Best, At(X - 1, Y - 1) + kDiagonal);
-                Best = Min(Best, At(X + 1, Y - 1) + kDiagonal);
-                Result.Set(X, Y, Best);
-            }
+            Sweep(Result, Y, false, Wrap);
         }
 
-        for (SInt32 Y = Height - 1; Y >= 0; --Y)
+        for (UInt32 X = 0; X < Width; ++X)
         {
-            for (SInt32 X = Width - 1; X >= 0; --X)
+            Sweep(Result, X, true, Wrap);
+        }
+
+        for (UInt32 Y = 0; Y < Height; ++Y)
+        {
+            for (UInt32 X = 0; X < Width; ++X)
             {
-                Real32 Best = Result.Get(X, Y);
-                Best = Min(Best, At(X + 1, Y)     + kStraight);
-                Best = Min(Best, At(X,     Y + 1) + kStraight);
-                Best = Min(Best, At(X + 1, Y + 1) + kDiagonal);
-                Best = Min(Best, At(X - 1, Y + 1) + kDiagonal);
-                Result.Set(X, Y, Best);
+                Real32 Reach = Sqrt(Result.Get(X, Y));
+
+                // A texture that does not tile ends in empty space, so its border counts as outline too.
+                if (!Wrap)
+                {
+                    Reach = Min(Reach, static_cast<Real32>(Min(Min(X, Width - 1 - X), Min(Y, Height - 1 - Y)) + 1));
+                }
+
+                // The distance runs between pixel centres, so half a pixel is taken off to measure from the edge.
+                Result.Set(X, Y, Max(Reach - 0.5f, 0.0f));
             }
         }
         return Result;

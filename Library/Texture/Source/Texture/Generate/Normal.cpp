@@ -68,22 +68,6 @@ namespace Studio::Texture
         const UInt16 Height = Source.GetHeight();
 
         Field Base = Field::From(Source, Settings.Input);
-
-        // Transparent pixels are ground level, so the outline of the art reads as the edge of a raised shape.
-        if (Settings.Input.Masked)
-        {
-            for (UInt32 Y = 0; Y < Height; ++Y)
-            {
-                for (UInt32 X = 0; X < Width; ++X)
-                {
-                    if (!Source.IsSolid(X, Y))
-                    {
-                        Base.Set(X, Y, 0.0f);
-                    }
-                }
-            }
-        }
-
         Base.Blur(Settings.Input.Blur, Settings.Input.Wrap);
 
         // How much the outer rows count against the centre one, the central difference having no outer rows.
