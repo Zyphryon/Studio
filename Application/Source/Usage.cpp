@@ -147,6 +147,8 @@ namespace Studio::Application
         LOG_I("  --rig                 Carry the skin and its clips across                     [on]");
         LOG_I("  --lod <n>             Reduced levels of detail after the full mesh, 0 to 3    [3]");
         LOG_I("  --coverage <list>     View height share each level is kept down to, by commas [0.03,0.015,0.0075]");
+        LOG_I("  --drift <pixels>      Pixels a level may stray at 1080 lines, 0 for --coverage [1]");
+        LOG_I("  --density <n>         Pixels a unit covers up close, to warn of a mesh too dense, 0 for never [64]");
         LOG_I("  --once <names>        Clips that play once and hold, by baked name, by commas [none]");
         LOG_I("  The attribute list names Position, Normal, Tangent, TexCoord0, TexCoord1, Color0, BlendIndices and");
         LOG_I("  BlendWeights; a bracketed run shares one interleaved stream and a bare name is a stream of its own,");

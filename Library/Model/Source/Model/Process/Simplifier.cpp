@@ -23,7 +23,7 @@ namespace Studio::Model
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
     Sequence<Simplifier::Level> Simplifier::Generate(
-        Ref<ZyJob::Service> Scheduler, Ref<Scene> Source, ConstSpan<Profile::Detail> Details)
+        Ref<ZyJob::Service> Scheduler, Ref<Scene> Source, ConstSpan<Profile::Detail> Details, Real32 Drift)
     {
         // Attributes are weighted rather than their seams locked, the normal lower since shading forgives more drift.
         static constexpr Array kWeights(0.2f, 0.2f, 0.2f, 0.6f, 0.6f);
@@ -70,11 +70,14 @@ namespace Studio::Model
             Target[4] = Vertex.TexCoord0.GetY();
         }
 
-        const UInt Levels = Details.GetSize() - 1;
+        const UInt   Levels = Details.GetSize() - 1;
+        const Real32 Scale  = meshopt_simplifyScale(Positions.GetData(), Vertices.GetSize(), 3 * sizeof(Real32));
 
         // One entry per surface per coarser level, so a reduction's place follows from its index, not its finish.
-        const auto Reduce = [&](UInt32 Options)
+        const auto Reduce = [&](UInt32 Options, Real32 Limit, Ref<Sequence<Real32>> Strays)
         {
+            Strays.Resize(Levels * Surfaces.GetSize());
+
             Sequence<Sequence<UInt32>> Reductions;
             Reductions.Resize(Levels * Surfaces.GetSize());
 
@@ -100,6 +103,8 @@ namespace Studio::Model
 
                     Scratch.Resize(Surface.Count);
 
+                    Real32 Stray = 0.0f;
+
                     const UInt Count = meshopt_simplifyWithAttributes(
                         Scratch.GetData(),
                         Source.Indices.GetData() + Surface.Offset,
@@ -113,21 +118,27 @@ namespace Studio::Model
                         kAttributes,
                         nullptr,
                         Target,
-                        Setting.Error,
+                        Setting.Error * Limit,
                         Options,
-                        nullptr);
+                        AddressOf(Stray));
 
                     if (Count > 0 && Count < Surface.Count)
                     {
                         Reductions[Slot].Append(ConstSpan(Scratch.GetData(), Count));
+                        Strays[Slot] = Stray;
                     }
                 }
             });
             return Reductions;
         };
 
-        const Sequence<Sequence<UInt32>> Drawn = Reduce(meshopt_SimplifySparse);
-        const Sequence<Sequence<UInt32>> Cast  = Reduce(meshopt_SimplifySparse | meshopt_SimplifyPermissive);
+        constexpr UInt32 kOptions = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
+
+        Sequence<Real32> Strays;
+        Sequence<Real32> Ignored;
+
+        const Sequence<Sequence<UInt32>> Drawn = Reduce(kOptions, Scale, Strays);
+        const Sequence<Sequence<UInt32>> Cast  = Reduce(kOptions | meshopt_SimplifyPermissive, Scale * kLoose, Ignored);
 
         // Nothing gained leaves the run it was asked to reduce, rather than a copy of it.
         const auto Place = [&](ConstRef<Sequence<UInt32>> Produced, ConstRef<Scene::Surface> Fallback)
@@ -159,6 +170,26 @@ namespace Studio::Model
                 // A surface its casters could not shrink casts as the level draws it.
                 ConstRef<Scene::Surface> Own = Entry.Surfaces.Append(Place(Drawn[Slot], Surfaces[Index]));
                 Entry.Casters.Append(Place(Cast[Slot], Own));
+            }
+        }
+
+        // A finer level is kept only while the next would stray past the drift, seen at the size it covers.
+        if (Drift > 0.0f)
+        {
+            const Vector3 Size  = Source.GetBounds().GetSize();
+            const Real32  Reach = Max(Size.GetX(), Size.GetY(), Size.GetZ());
+
+            for (UInt Step = 0; Step < Levels; ++Step)
+            {
+                Real32 Worst = 0.0f;
+
+                for (UInt Index = 0; Index < Surfaces.GetSize(); ++Index)
+                {
+                    Worst = Max(Worst, Strays[Step * Surfaces.GetSize() + Index]);
+                }
+
+                const Real32 Coverage = Drift * Reach / (kLines * Max(Worst, kEpsilon<Real32>));
+                Result[Step].Coverage = (Step > 0 ? Min(Coverage, Result[Step - 1].Coverage) : Coverage);
             }
         }
         return Result;

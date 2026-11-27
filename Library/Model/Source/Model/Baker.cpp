@@ -75,7 +75,8 @@ namespace Studio::Model
             Tangent::Generate(Decoded);
         }
 
-        const Sequence<Simplifier::Level> Levels = Simplifier::Generate(mScheduler, Decoded, Profile.Details);
+        const Sequence<Simplifier::Level> Levels = Simplifier::Generate(
+            mScheduler, Decoded, Profile.Details, Profile.Drift);
 
         Indexer::Optimize(Decoded, Levels);
 
@@ -114,9 +115,24 @@ namespace Studio::Model
                 Count * 100 / Triangles,
                 static_cast<UInt>(Levels[Index].Coverage * 100.0f),
                 Cast > 0 ? Cast : Count);
+
+            if (Index > 0 && Index + 1 == Levels.GetSize() && Triangles > kFew && Count * kPart > Triangles)
+            {
+                LOG_W("Model: its levels stall at {0} of {1} triangles, held by its seams", Count, Triangles);
+            }
         }
 
         const Box Extent = Decoded.GetBounds();
+
+        // A mesh with more triangles than the pixels of its widest side is finer than anyone sees.
+        const Vector3 Size   = Extent.GetSize() * Profile.Density;
+        const Real32  Pixels = Max(Size.GetX() * Size.GetY(), Size.GetY() * Size.GetZ(), Size.GetZ() * Size.GetX());
+
+        if (Profile.Density > 0.0f && static_cast<Real32>(Triangles) > Pixels)
+        {
+            LOG_W("Model: its {0} triangles are more than the {1} pixels it covers at {2} a unit",
+                Triangles, static_cast<UInt>(Pixels), Profile.Density);
+        }
 
         Bundle Result;
         Result.Mesh = Exporter::ExportMesh(Packed, Extent, Levels);

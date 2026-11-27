@@ -76,6 +76,12 @@ namespace Studio::Model
         /// The levels of detail to generate, coarsest last.
         Sequence<Detail>   Details    = StandardDetail();
 
+        /// The pixels of a 1080-line view a level may stray by before a finer one is drawn, 0 to keep its coverage.
+        Real32             Drift      = 1.0f;
+
+        /// The pixels a unit covers where the model is seen nearest, 0 to never warn of a mesh denser than them.
+        Real32             Density    = 64.0f;
+
         /// \brief Checks whether an attribute is one of those requested.
         ///
         /// \param Slot The semantic to look for.

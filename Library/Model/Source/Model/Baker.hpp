@@ -78,6 +78,12 @@ namespace Studio::Model
 
     private:
 
+        /// \brief The triangles a mesh may have before its levels are expected to reduce it.
+        static constexpr UInt kFew = 300;
+
+        /// \brief The share of a mesh its last level may still keep, as the parts it is divided into.
+        static constexpr UInt kPart = 4;
+
         /// \brief Turns a name from the source into one safe to put in a file name.
         ///
         /// \param Value    The name the source gives.

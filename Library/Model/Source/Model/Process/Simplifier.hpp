@@ -40,7 +40,13 @@ namespace Studio::Model
         };
 
         /// \brief The floats per vertex the reduction weighs, three of the normal and two of the first UV set.
-        static constexpr UInt kAttributes = 5;
+        static constexpr UInt   kAttributes = 5;
+
+        /// \brief The lines of the view a drift is measured on.
+        static constexpr Real32 kLines      = 1080.0f;
+
+        /// \brief The times further a caster may stray than what its level draws.
+        static constexpr Real32 kLoose      = 3.0f;
 
     public:
 
@@ -49,8 +55,9 @@ namespace Studio::Model
         /// \param Scheduler The pool the reductions are spread over.
         /// \param Source    The scene, whose indices grow by the reduced runs of every level past the first.
         /// \param Details   The reduction and coverage of every level, coarsest last.
+        /// \param Drift     The pixels a level may stray by before a finer one is drawn, 0 to keep its coverage.
         /// \return The levels, the first being the scene's own geometry, or empty for a scene without surfaces.
         static Sequence<Level> Generate(
-            Ref<ZyJob::Service> Scheduler, Ref<Scene> Source, ConstSpan<Profile::Detail> Details);
+            Ref<ZyJob::Service> Scheduler, Ref<Scene> Source, ConstSpan<Profile::Detail> Details, Real32 Drift);
     };
 }
