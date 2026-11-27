@@ -62,23 +62,32 @@ namespace Studio::Model
             }
         }
 
-        const UInt Corners   = Decoded.Vertices.GetSize();
-        const UInt Triangles = Decoded.Indices.GetSize() / 3;
+        const UInt Corners = Decoded.Vertices.GetSize();
+        const UInt Faces   = Decoded.Indices.GetSize() / 3;
 
         Indexer::Unify(Decoded);
 
-        // Built after the weld, so a vertex shared by several triangles takes all of them and the frame stays smooth.
-        const Bool Bare = !Decoded.Has(Scene::Attribute::Tangent);
+        const UInt Triangles = Decoded.Indices.GetSize() / 3;
 
-        if (Profile.Tangents && Profile.Wants(ZyGraphic::VertexSlot::Tangent) && Bare)
+        // The weld drops repeated and collapsed triangles, which may be all the scene carries.
+        if (Triangles == 0)
+        {
+            LOG_E("Model: every triangle of the scene repeats another or has two corners alike");
+
+            return Bundle();
+        }
+
+        // Built after the weld, so the corners of a vertex are known before their frames are told apart.
+        if (Profile.Tangents && Profile.Wants(ZyGraphic::VertexSlot::Tangent))
         {
             Tangent::Generate(Decoded);
         }
 
-        const Sequence<Simplifier::Level> Levels = Simplifier::Generate(
+        Sequence<Simplifier::Level> Levels = Simplifier::Generate(
             mScheduler, Decoded, Profile.Details, Profile.Drift);
 
-        Indexer::Optimize(Decoded, Levels);
+        Indexer::Shadow(Decoded, Levels);
+        Indexer::Optimize(mScheduler, Decoded, Levels);
 
         const Layout::Result Packed = Layout::Pack(Decoded, Profile.Attributes);
 
@@ -93,6 +102,11 @@ namespace Studio::Model
             Decoded.Materials.GetSize(),
             Packed.Bindings.GetSize(),
             Packed.Streams);
+
+        if (Triangles < Faces)
+        {
+            LOG_I("Model:     left out {0} triangles that repeat another or have two corners alike", Faces - Triangles);
+        }
 
         for (UInt Index = 0; Index < Levels.GetSize(); ++Index)
         {
@@ -116,9 +130,13 @@ namespace Studio::Model
                 static_cast<UInt>(Levels[Index].Coverage * 100.0f),
                 Cast > 0 ? Cast : Count);
 
-            if (Index > 0 && Index + 1 == Levels.GetSize() && Triangles > kFew && Count * kPart > Triangles)
+            // A mesh asked for levels whose coarsest still draws most of it is one the reduction could not get past.
+            const Bool Last = Profile.Details.GetSize() > 1 && Index + 1 == Levels.GetSize();
+
+            if (Last && Triangles > kFew && Count * kPart > Triangles)
             {
-                LOG_W("Model: its levels stall at {0} of {1} triangles, held by its seams", Count, Triangles);
+                LOG_W("Model: its levels stall at {0} of {1} triangles, held by its seams and loose parts",
+                    Count, Triangles);
             }
         }
 

@@ -11,6 +11,7 @@
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 #include "Tangent.hpp"
+#include <meshoptimizer.h>
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // [   CODE   ]
@@ -29,54 +30,73 @@ namespace Studio::Model
         }
 
         Ref<Sequence<Scene::Vertex>> Vertices = Source.Vertices;
-        ConstRef<Sequence<UInt32>>   Indices  = Source.Indices;
+        Ref<Sequence<UInt32>>        Indices  = Source.Indices;
 
-        Sequence<Vector3> Along;
-        Sequence<Vector3> Across;
-        Along.Fill(Vector3(0.0f, 0.0f, 0.0f), Vertices.GetSize());
-        Across.Fill(Vector3(0.0f, 0.0f, 0.0f), Vertices.GetSize());
+        // One frame per corner, weighed the way MikkTSpace does, which is what a normal map is baked against.
+        Sequence<Real32> Frames;
+        Frames.Resize(Indices.GetSize() * 4);
 
-        for (UInt Cursor = 0; Cursor + 2 < Indices.GetSize(); Cursor += 3)
+        meshopt_generateTangents(
+            Frames.GetData(),
+            Indices.GetData(),
+            Indices.GetSize(),
+            reinterpret_cast<ConstPtr<Real32>>(AddressOf(Vertices[0].Position)),
+            Vertices.GetSize(),
+            sizeof(Scene::Vertex),
+            reinterpret_cast<ConstPtr<Real32>>(AddressOf(Vertices[0].Normal)),
+            sizeof(Scene::Vertex),
+            reinterpret_cast<ConstPtr<Real32>>(AddressOf(Vertices[0].TexCoord0)),
+            sizeof(Scene::Vertex),
+            meshopt_TangentCompatible | meshopt_TangentZeroFallback);
+
+        const auto Take = [&Frames](Ref<Scene::Vertex> Vertex, UInt Corner)
         {
-            const Array Corners(Indices[Cursor], Indices[Cursor + 1], Indices[Cursor + 2]);
+            const ConstPtr<Real32> Frame = Frames.GetData() + Corner * 4;
 
-            const Vector3 Edge0  = Vertices[Corners[1]].Position  - Vertices[Corners[0]].Position;
-            const Vector3 Edge1  = Vertices[Corners[2]].Position  - Vertices[Corners[0]].Position;
-            const Vector2 Delta0 = Vertices[Corners[1]].TexCoord0 - Vertices[Corners[0]].TexCoord0;
-            const Vector2 Delta1 = Vertices[Corners[2]].TexCoord0 - Vertices[Corners[0]].TexCoord0;
-
-            // Collinear or collapsed texture coordinates pin no direction, so the triangle adds nothing.
-            const Real32 Determinant = Delta0.GetX() * Delta1.GetY() - Delta1.GetX() * Delta0.GetY();
-
-            if (IsAlmostZero(Determinant))
-            {
-                continue;
-            }
-
-            const Real32  Scale     = 1.0f / Determinant;
-            const Vector3 Tangent   = (Edge0 * Delta1.GetY() - Edge1 * Delta0.GetY()) * Scale;
-            const Vector3 Bitangent = (Edge1 * Delta0.GetX() - Edge0 * Delta1.GetX()) * Scale;
-
-            for (const UInt32 Corner : Corners)
-            {
-                Along[Corner]  = Along[Corner] + Tangent;
-                Across[Corner] = Across[Corner] + Bitangent;
-            }
-        }
-
-        for (UInt Index = 0; Index < Vertices.GetSize(); ++Index)
-        {
-            Ref<Scene::Vertex> Vertex = Vertices[Index];
-
-            // Kept orthogonal to the normal however the contributing triangles were angled.
-            const Vector3 Projected = Along[Index] - Vertex.Normal * Vector3::Dot(Vertex.Normal, Along[Index]);
-
-            // A vertex whose texture coordinates pin no direction takes any one off its normal.
+            // A corner whose texture coordinates pin no direction takes any one off its normal.
             const Vector3 Aside = Steady(Vector3::Perpendicular(Vertex.Normal), Vector3::UnitX());
 
-            Vertex.Tangent    = Steady(Projected, Aside);
-            Vertex.Handedness = Vector3::Dot(
-                Vector3::Cross(Vertex.Normal, Vertex.Tangent), Across[Index]) < 0.0f ? -1.0f : 1.0f;
+            // The engine winds its fronts clockwise, which turns the bitangent over from where the sign puts it.
+            Vertex.Tangent    = Steady(Vector3(Frame[0], Frame[1], Frame[2]), Aside);
+            Vertex.Handedness = -Frame[3];
+        };
+
+        for (UInt Corner = 0; Corner < Indices.GetSize(); ++Corner)
+        {
+            Take(Vertices[Indices[Corner]], Corner);
+        }
+
+        // A corner whose frame is not its vertex's takes a copy of the vertex, as either side of a mirrored seam does.
+        Sequence<UInt32> Copies;
+        Copies.Fill(kNone, Vertices.GetSize());
+
+        for (UInt Corner = 0; Corner < Indices.GetSize(); ++Corner)
+        {
+            const UInt32 Origin = Indices[Corner];
+
+            Scene::Vertex Wanted = Vertices[Origin];
+            Take(Wanted, Corner);
+
+            const auto Differs = [&](UInt32 Other)
+            {
+                return Vertices[Other].Tangent != Wanted.Tangent || Vertices[Other].Handedness != Wanted.Handedness;
+            };
+
+            UInt32 Match = Origin;
+
+            while (Match != kNone && Differs(Match))
+            {
+                Match = Copies[Match];
+            }
+
+            if (Match == kNone)
+            {
+                Match = static_cast<UInt32>(Vertices.GetSize());
+
+                Vertices.Append(Wanted);
+                Copies.Append(Exchange(Copies[Origin], Match));
+            }
+            Indices[Corner] = Match;
         }
 
         Source.Attributes |= Scene::Attribute::Tangent;

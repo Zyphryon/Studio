@@ -166,12 +166,9 @@ namespace Studio::Model
         Result.Tangents = Environment.GetBool("tangents",         Result.Tangents);
         Result.Rig      = Environment.GetBool("rig",              Result.Rig);
 
-        // An unknown name reads as the fallback, so reading against two fallbacks is what tells a typo from a match.
         if (const Text Name = Environment.GetText("interpolation", Text::Empty()); !Name.IsEmpty())
         {
-            Result.Blend = ZyEnum::Cast(Name, Interpolation::Step);
-
-            if (Result.Blend != ZyEnum::Cast(Name, Interpolation::Linear))
+            if (!ZyEnum::Find(Name, Result.Blend))
             {
                 LOG_E("Model: '{0}' is not an interpolation; use Step, Linear, Cubic or Hermite", Name);
 

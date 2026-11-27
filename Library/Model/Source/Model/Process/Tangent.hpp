@@ -20,18 +20,21 @@
 
 namespace Studio::Model
 {
-    /// \brief Builds the tangent frame a normal map is sampled through, for a scene whose source carries none.
+    /// \brief Builds the tangent frame a normal map is sampled through, the way the tools that bake one do.
     class Tangent final
     {
     public:
 
-        /// \brief Builds a smooth tangent and its handedness for every vertex, from the triangles sharing it.
+        /// \brief Builds the tangent and handedness of every corner, splitting a vertex its corners disagree on.
         ///
-        /// \param Source The welded scene, which needs normals and first texture coordinates.
+        /// \param Source The welded scene, which needs normals and first texture coordinates and may gain vertices.
         /// \return `true` if the tangents were built, `false` when the scene lacks what they are built from.
         static Bool Generate(Ref<Scene> Source);
 
     private:
+
+        /// \brief The link of a vertex no copy was made of.
+        static constexpr UInt32 kNone = kMaximum<UInt32>;
 
         /// \brief Normalizes a direction, or falls back when it has no length.
         ///

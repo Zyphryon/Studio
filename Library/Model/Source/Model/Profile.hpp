@@ -42,7 +42,7 @@ namespace Studio::Model
             /// The smallest fraction of the viewport's height the level is drawn at, 0 for the last level.
             Real32 Coverage = 0.0f;
 
-            /// The furthest the reduction may move the silhouette, as a fraction of the mesh's extent.
+            /// The furthest the level may stray from the source, as a fraction of the mesh's extent.
             Real32 Error    = 0.02f;
         };
 
@@ -55,13 +55,13 @@ namespace Studio::Model
         /// `true` to generate normals for geometry that carries none, `false` to leave it without.
         Bool               Normals    = true;
 
-        /// `true` to generate tangents for textured geometry that carries none, `false` to leave it without.
+        /// `true` to generate the tangents of textured geometry, `false` to leave it without any.
         Bool               Tangents   = true;
 
         /// `true` to carry a skin and its clips across, `false` to bake a rigged source as the prop it rests as.
         Bool               Rig        = true;
 
-        /// The samples per second every clip is resampled onto.
+        /// The samples per second a clip is resampled at, bent so a whole number of steps spans its length.
         Real32             Rate       = 30.0f;
 
         /// The way the runtime reads between a clip's samples, Hermite tripling a clip to carry the source's slopes.
